@@ -6,7 +6,7 @@ SDD + TDD 방식으로 개발한다.
 
 ## 현재 상태
 
-- 단계: 2. Specify (REQUIREMENTS 작성 중)
+- 단계: 3. Plan (DATA_MODEL 작성 중)
 - 진행 중인 작업: 없음
 
 > 이 섹션은 사람이 갱신한다.
