@@ -6,7 +6,7 @@ SDD + TDD 방식으로 개발한다.
 
 ## 현재 상태
 
-- 단계: 1. Constitution (TRD 작성 중)
+- 단계: 2. Specify (PRD 작성 중)
 - 진행 중인 작업: 없음
 
 > 이 섹션은 사람이 갱신한다.
@@ -22,6 +22,7 @@ SDD + TDD 방식으로 개발한다.
 | 문서 | 단계 | 역할 | 소유 | 언제 읽나 |
 |---|---|---|---|---|
 | `docs/TRD.md` | Constitution | 기술 스택, 아키텍처, 코딩·TDD 규칙 | 사람 | 항상 |
+| `docs/wireframes/` | Specify | 화면 기획 (서버 요구사항의 근거) | 사람 | 요구사항 작성 시 |
 | `docs/PRD.md` | Specify | 제품 목적, 대상, 범위 | 사람 | 요구사항 작성, 범위 판단 시 |
 | `docs/REQUIREMENTS.md` | Specify | 기능 요구사항(REQ-xxx), 인수 조건 | 사람 | 설계, 검증 시 |
 | `docs/DATA_MODEL.md` | Plan | 엔티티, 필드, 제약 조건 | 에이전트 초안 → 사람 승인 | Entity, Repository 작업 시 |
