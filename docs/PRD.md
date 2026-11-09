@@ -1,6 +1,6 @@
 # PRD — Product Requirements Document
 
-> 상태: **초안** (사람의 검토·승인 전)
+> 상태: **확정**
 > 근거: `docs/wireframes/Marvin's_TODO_Wireframe.pdf` (목록 화면, 수정 화면, 빈 상태·예외 상태)
 > 이 문서는 REQUIREMENTS.md의 근거 문서다. 기술 사항은 다루지 않는다. (`TRD.md` 참조)
 

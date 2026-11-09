@@ -1,6 +1,6 @@
 # TRD — Technical Requirements Document
 
-> 상태: **초안** (사람의 검토·승인 전)
+> 상태: **확정**
 > 이 문서는 Constitution 단계의 산출물이며, 모든 하위 문서와 코드의 기준이다.
 > 소유: 사람. 변경은 사람이 요청한 경우에만 한다.
 
