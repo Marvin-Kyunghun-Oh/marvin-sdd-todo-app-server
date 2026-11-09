@@ -14,7 +14,7 @@ Marvin's Todo 앱의 서버. Java + Spring Boot 기반 REST API 서버이며 SDD
 | 항목 | 결정 |
 |---|---|
 | 언어 | Java 17 |
-| 프레임워크 | Spring Boot 3.x |
+| 프레임워크 | Spring Boot 4.1.x |
 | 빌드 도구 | Gradle |
 | 데이터 접근 | Spring Data JPA |
 | 데이터베이스 | H2 (인메모리) |
@@ -178,5 +178,5 @@ Constitution → Specify → Plan → Tasks → Implement → Validate
 
 ## 10. 열린 항목
 
-- Spring Boot 3.x의 구체 버전과 Gradle 래퍼 버전은 프로젝트 생성 시 확정한다.
+- Spring Boot 4.1.x의 패치 버전과 Gradle 래퍼 버전은 프로젝트 생성 시 확정한다.
 - 빌드·실행 명령어는 프로젝트 생성 후 `CLAUDE.md`에 갱신한다.
