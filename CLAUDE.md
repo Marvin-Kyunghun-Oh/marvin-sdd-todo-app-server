@@ -6,7 +6,6 @@
 ## 1. 프로젝트 개요
 - 간단한 TODO 앱 'Marvin's Todo App'의 API 서버를 만든다.
 - SDD(명세 주도 개발)와 TDD(테스트 주도 개발)로 진행한다.
-- 개발 환경: JDK 21, Gradle 9.8.2
 
 ## 2. 원칙 (Constitution)
 
