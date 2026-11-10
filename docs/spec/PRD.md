@@ -1,7 +1,7 @@
-# PRD — Marvin's Todo App (초안)
+# PRD — Marvin's Todo App
 
 > SDD 1단계(Specify) 산출물. 근거 자료: `Marvins_Todo_APP_Wireframe.pdf` (3장).
-> 상태: **초안 (사람의 승인 대기)**
+> 상태: **확정 (2026-11-10, Marvin-Oh)**
 > 세부 요구사항과 수용 기준은 `REQUIREMENTS.md`, 확정된 판단은 `DECISION_LOG.md`를 따른다.
 
 ## 1. 배경과 목적
@@ -79,4 +79,4 @@
 - 빈 목록, 결과 없음 같은 실패가 아닌 상황의 문구는 화면이 맡는다.
 
 ## 8. 남은 질문
-- 없음. 20개 질문이 모두 처리되었다(`DECISION_LOG.md` 참고).
+- 없음. D-01~D-29가 모두 결정되었다(`DECISION_LOG.md` 참고).
