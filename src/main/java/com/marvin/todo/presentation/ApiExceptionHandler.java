@@ -1,6 +1,7 @@
 package com.marvin.todo.presentation;
 
 import com.marvin.todo.domain.TodoException;
+import org.apache.tomcat.util.http.InvalidParameterException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -34,6 +35,12 @@ class ApiExceptionHandler {
             HttpMediaTypeNotAcceptableException.class})
     ResponseEntity<ErrorResponse> handleUnreadable(Exception exception) {
         return respond(ApiError.MALFORMED_REQUEST);
+    }
+
+    // 이 API의 쿼리 파라미터는 `status` 하나라서, 인코딩이 깨져 읽을 수 없는 파라미터는 보기 구분 오류다 (TD-53).
+    @ExceptionHandler(InvalidParameterException.class)
+    ResponseEntity<ErrorResponse> handleUnreadableParameter(InvalidParameterException exception) {
+        return respond(ApiError.INVALID_STATUS_FILTER);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
