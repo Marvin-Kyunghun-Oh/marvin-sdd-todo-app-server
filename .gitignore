@@ -10,3 +10,12 @@
 # Gradle
 .gradle/
 build/
+
+# 다른 IDE
+*.iml
+out/
+.vscode/
+.classpath
+.project
+.settings/
+Thumbs.db
