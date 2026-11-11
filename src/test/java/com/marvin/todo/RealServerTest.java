@@ -39,4 +39,12 @@ class RealServerTest {
         assertThat(response).contains("INVALID_STATUS_FILTER", "보기 구분이 올바르지 않아요. 전체, 진행 중, 완료 중에서 골라 주세요.");
     }
 
+    @Test
+    @DisplayName("`status=all`을 명시하면 전체 목록이 돌아온다 (API_SPEC 2.2)")
+    void status_all을_명시하면_전체_목록이다() throws Exception {
+        String response = get("/todos?status=all");
+
+        assertThat(response).startsWith("HTTP/1.1 200");
+        assertThat(response).contains("\"items\":[]", "\"total\":0");
+    }
 }
