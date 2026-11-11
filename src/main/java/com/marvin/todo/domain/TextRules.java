@@ -50,6 +50,15 @@ final class TextRules {
         }
     }
 
+    static boolean isNormalizedTitle(String title) {
+        return title != null && !title.isEmpty() && title.equals(title.strip()) && length(title) <= MAX_TITLE_LENGTH;
+    }
+
+    static boolean isNormalizedDescription(String description) {
+        return description == null
+                || (!description.isEmpty() && description.equals(description.strip()) && length(description) <= MAX_DESCRIPTION_LENGTH);
+    }
+
     private static int length(String text) {
         return text.codePointCount(0, text.length());
     }
