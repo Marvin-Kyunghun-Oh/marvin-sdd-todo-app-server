@@ -18,7 +18,7 @@
 11. 입력이 잘못된 경우는 400, 없는 할 일이나 없는 주소는 404, 허용되지 않은 방식은 405, 서버 내부 오류는 500이다.
 12. 오류가 여러 개여도 첫 번째 하나만 알려 준다. 요청을 읽을 수 없으면 그것이 먼저, 없는 할 일이 그다음, 그 뒤가 제목, 설명, 마감일 순서다.
 13. JSON을 받을 수 없다고 밝힌 요청(예: `text/html`만 받겠다)은 모든 주소에서 "요청을 읽을 수 없다"로 거부한다. 헤더를 생략하거나 `*/*`이면 통과한다. 이때도 오류 응답은 항상 JSON이다.
-14. 이 서버가 하지 않는 것: 페이지 나눔, 정렬 바꾸기, 검색, 로그인, 버전 주소(`/v1`), 다른 주소의 화면에서 호출을 허용하는 설정(CORS). 마지막은 화면과 서버를 다른 주소에 띄우면 브라우저가 막을 수 있어서, 배포 방식이 정해지면 다시 확인해야 한다.
+14. 이 서버가 하지 않는 것: 페이지 나눔, 정렬 바꾸기, 검색, 로그인, 버전 주소(`/v1`), 다른 주소의 화면에서 호출을 허용하는 설정(CORS). 마지막은 화면과 서버를 다른 주소에 띄우면 브라우저가 막을 수 있어서, 배포 방식이 정해지면 다시 확인해야 한다. 알려진 한계도 있다: 주소 자체가 깨진 요청(`/todos/%zz`)은 서버 앞단이 먼저 거부해 약속된 오류 모양이 아닐 수 있고, `HEAD`·`OPTIONS` 요청과 요청 헤더의 문자셋 표기는 따로 보장하지 않는다.
 15. 문서의 예시는 모두 "오늘이 2026-11-10"이라고 가정한다. 명세의 수용 기준 56개가 모두 어느 주소에 해당하는지 표로 연결했고 빠진 것이 없음을 확인했다.
 
 ---
@@ -41,17 +41,18 @@
 | 완료 표시 / 되돌리기 | `PATCH /todos/{id}` | 200 + Todo | 2.5 |
 | 삭제 | `DELETE /todos/{id}` | 204 (본문 없음) | 2.6 |
 
-표에 없는 경로는 404 `ENDPOINT_NOT_FOUND`이고(끝에 `/`가 붙은 `/todos/`도 포함), 표에 있는 경로의 다른 메서드는 405 `METHOD_NOT_ALLOWED`다 (AC-14-5, AC-14-6, TD-48). `HEAD`, `OPTIONS`는 계약에 넣지 않는다.
+표에 없는 경로는 404 `ENDPOINT_NOT_FOUND`이고(끝에 `/`가 붙은 `/todos/`도 포함), 표에 있는 경로의 다른 메서드는 405 `METHOD_NOT_ALLOWED`다 (AC-14-5, AC-14-6, TD-48). `HEAD`, `OPTIONS`는 계약에 넣지 않는다. 프레임워크 기본 동작에 맡기며 응답을 보장하지 않는다 (TD-53). 스프링이 기본으로 열어 두는 `/error`도 표에 없는 경로이므로 404 `ENDPOINT_NOT_FOUND`다.
+- **알려진 한계 (TD-53):** 주소 자체가 깨진 요청(잘못된 `%` 인코딩이 경로에 있는 경우, 예: `/todos/%zz`)은 스프링에 닿기 전에 톰캣이 거부하며, 이때는 이 문서의 JSON 오류 모양을 보장하지 않는다. 쿼리 값의 `%` 인코딩이 깨진 경우는 해당 파라미터의 오류로 본다(2.2).
 
 ### 1.2 요청 헤더 (D-31, D-37, D-39, TD-43)
 | 헤더 | 규칙 |
 | --- | --- |
-| `Content-Type` | `POST`, `PUT`, `PATCH`는 `application/json`이어야 한다. `application/json; charset=UTF-8`도 된다. 없거나 다른 형식이면 400 `MALFORMED_REQUEST`다. 본문이 비어 있어도 같다. `GET`, `DELETE`는 필요 없고, 본문이 와도 무시한다 |
+| `Content-Type` | `POST`, `PUT`, `PATCH`는 `application/json`이어야 한다. `application/json; charset=UTF-8`도 된다. `charset` 표기는 검사하지 않는다(다른 charset을 적어도 거부하지 않는다, TD-53). 없거나 JSON이 아닌 형식이면 400 `MALFORMED_REQUEST`다. 본문이 비어 있어도 같다. `GET`, `DELETE`는 필요 없고, 본문이 와도 무시한다 |
 | `Accept` | 없거나 JSON을 받을 수 있는 값(`*/*`, `application/json` 등)이면 된다. JSON을 받을 수 없는 값(예: `text/html`만)이면 **모든 엔드포인트에서** 400 `MALFORMED_REQUEST`다 |
 - 문자 인코딩은 UTF-8이다.
 
 ### 1.3 응답 (TD-47)
-- 본문이 있는 응답과 모든 오류 응답은 `Content-Type: application/json`(UTF-8)이다. 오류 응답은 `Accept`와 관계없이 항상 JSON이다.
+- 본문이 있는 응답과 모든 오류 응답은 `Content-Type: application/json`이다. 본문은 UTF-8이며 헤더에 `charset`을 붙이지 않는다 (TD-53). 오류 응답은 `Accept`와 관계없이 항상 JSON이다.
 - `204`는 본문이 없다. `Location`, `Allow` 같은 부가 헤더는 계약에 포함하지 않는다.
 - 필드 이름은 camelCase다. 날짜는 `YYYY-MM-DD` 문자열이다.
 
@@ -163,7 +164,7 @@
 | --- | --- | --- | --- |
 | `status` | `all`, `active`, `done` (소문자만) | `all` | 전체 / 진행 중 / 완료 (FR-04) |
 
-- `status=ALL`, `status=foo`, 빈 값(`status=`), 반복(`status=active&status=done`)은 400 `INVALID_STATUS_FILTER`다.
+- `status=ALL`, `status=foo`, 빈 값(`status=`), 반복(`status=active&status=done`), `%` 인코딩이 깨진 값(`status=%zz`)은 400 `INVALID_STATUS_FILTER`다 (TD-53).
 - 이 표에 없는 쿼리 파라미터는 무시한다.
 
 **요청 헤더:** 없음 (`Accept`는 선택)

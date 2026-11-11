@@ -74,6 +74,7 @@
 | TD-50 | `status` 기본값 구현 (API_SPEC 검토 반영) | `@RequestParam(defaultValue)`를 쓰지 않고 `required = false`로 받아 `null`일 때만 `all`. 빈 값은 `INVALID_STATUS_FILTER`. 웹 슬라이스 Red 테스트로 확인 | `defaultValue`는 빈 문자열에도 기본값을 넣어 TD-44(`status=` → 400)를 깸 | TRD 3.2, API_SPEC 2.2 |
 | TD-51 | `Accept` 검사 시점과 오류 응답 형식 (API_SPEC 검토 반영) | `Accept` 불일치는 컨트롤러 실행 전에 걸러 냄(매핑 `produces`). 오류 처리기는 응답 `Content-Type`을 `application/json`으로 명시. 두 동작을 웹 슬라이스 Red 테스트로 먼저 확인 | 응답 쓰기 시점에 검사하면 수정이 저장된 뒤 400이 나가 AC-08-3을 깸. 협상에 맡기면 `Accept: text/html`에서 본문 없는 406이 날 수 있음 | TRD 3.2, API_SPEC 1.2, 1.3 |
 | TD-52 | `Accept` 불일치의 겹침 순서 (API_SPEC 검토 반영) | `Accept` 불일치가 id 형식 오류·없는 id와 겹칠 때 어느 쪽이 나올지 정하지 않음(TD-22와 같음). 테스트는 겹치지 않게 따로 검증 | 명세가 이 조합을 요구하지 않음. 테스트 작성자가 순서를 고민하지 않게 함 | TRD 3.3, API_SPEC 1.9 |
+| TD-53 | 5단계 검증 반영: 계약 밖 동작 정리 | (1) 주소 자체가 깨진 요청(경로의 잘못된 `%` 인코딩)은 톰캣이 먼저 거부하므로 JSON 오류 모양을 보장하지 않는 알려진 한계로 둔다. (2) `HEAD`, `OPTIONS`는 프레임워크 기본 동작에 맡기고 보장하지 않는다. (3) 응답 `Content-Type`에는 `charset`을 붙이지 않고(본문은 UTF-8), 요청 `Content-Type`의 charset 표기는 검사하지 않는다. (4) `/error`는 표에 없는 경로로 404 `ENDPOINT_NOT_FOUND`다. (5) `status`의 `%` 인코딩이 깨진 값은 `INVALID_STATUS_FILTER`다 | 고치려면 톰캣 수준 설정이 필요해 현재 설계 밖이고 막을 실제 위험이 없음(1, 2, 3). 명세가 이미 정한 동작을 구현이 따르도록 문장을 명시(4, 5). Marvin 승인 2026-11-11 | API_SPEC 1.1, 1.2, 1.3, 2.2, TRD 한눈에 보기 15 |
 
 ## 명세로 올려 승인된 항목
 TRD가 정하지 않고 `docs/spec/`에 올려 승인받은 항목은 D-32(`completed` 누락), D-33(id가 번호가 아님), D-34(500), D-35(없는 경로/허용되지 않은 메서드)이다. TRD 6장의 표시는 지웠다.
