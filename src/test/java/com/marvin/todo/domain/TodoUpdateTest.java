@@ -3,6 +3,7 @@ package com.marvin.todo.domain;
 import java.time.LocalDate;
 
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
@@ -56,12 +57,17 @@ class TodoUpdateTest {
         assertThat(update("제목", rawDescription).description()).isNull();
     }
 
-    @Test
-    @DisplayName("오류가 여러 개여도 첫 오류 하나만 알려 준다 (검증 순서: 제목이 설명보다 먼저)")
-    void 제목과_설명이_모두_잘못되면_제목_오류만_난다() {
-        assertThatThrownBy(() -> update("", "가".repeat(1001)))
-                .isInstanceOfSatisfying(TodoException.class,
-                        e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TITLE_REQUIRED));
+    @Nested
+    @DisplayName("제목·설명 검증 순서")
+    class TitleBeforeDescription {
+
+        @Test
+        @DisplayName("오류가 여러 개여도 첫 오류 하나만 알려 준다 (검증 순서)")
+        void 제목과_설명이_모두_잘못되면_제목_오류만_난다() {
+            assertThatThrownBy(() -> update("", "가".repeat(1001)))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TITLE_REQUIRED));
+        }
     }
 
     private static TodoUpdate updateWithDueDate(String rawDueDateText) {
@@ -103,16 +109,21 @@ class TodoUpdateTest {
     }
 
     @Test
-    @DisplayName("AC-09-5 오늘이 2026-11-10일 때 마감일을 2026-11-01로 지정하면 저장되고 기한 지남이다 (도메인은 오늘을 모르므로 과거 날짜를 거부하지 않음)")
+    @DisplayName("AC-09-5 오늘이 2026-11-10일 때 마감일을 2026-11-01로 지정하면 저장된다 (도메인은 오늘을 모르므로 과거 날짜를 거부하지 않음)")
     void 과거_날짜도_마감일로_거부되지_않는다() {
         assertThat(updateWithDueDate("2026-11-01").dueDate()).isEqualTo(LocalDate.of(2026, 11, 1));
     }
 
-    @Test
-    @DisplayName("오류가 여러 개여도 첫 오류 하나만 알려 준다 (검증 순서: 설명이 마감일보다 먼저)")
-    void 설명과_마감일이_모두_잘못되면_설명_오류만_난다() {
-        assertThatThrownBy(() -> TodoUpdate.of("제목", "가".repeat(1001), "abc", false))
-                .isInstanceOfSatisfying(TodoException.class,
-                        e -> assertThat(e.code()).isEqualTo(TodoErrorCode.DESCRIPTION_TOO_LONG));
+    @Nested
+    @DisplayName("설명·마감일 검증 순서")
+    class DescriptionBeforeDueDate {
+
+        @Test
+        @DisplayName("오류가 여러 개여도 첫 오류 하나만 알려 준다 (검증 순서)")
+        void 설명과_마감일이_모두_잘못되면_설명_오류만_난다() {
+            assertThatThrownBy(() -> TodoUpdate.of("제목", "가".repeat(1001), "abc", false))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.DESCRIPTION_TOO_LONG));
+        }
     }
 }
