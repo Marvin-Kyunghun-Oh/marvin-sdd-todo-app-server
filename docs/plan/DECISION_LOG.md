@@ -35,7 +35,7 @@
 | TD-28 | 문서 분리 (리뷰 반영) | 3장(모델)과 5장(API)은 이후 `DATA_MODEL.md`, `API_SPEC.md`로 옮기고 TRD에는 요약만 남김. 옮기기 전까지는 TRD가 기준 | 기준 문서가 두 개가 되는 것을 방지 | TRD 머리말 |
 | TD-29 | Boot 4 의존성 이름 (재검토 반영, 승인됨) | 웹 스타터 `spring-boot-starter-webmvc`(구 `-web`은 deprecated), 테스트 스타터 `spring-boot-starter-webmvc-test`(`spring-boot-starter-test`를 함께 가져옴), Jackson 3(`tools.jackson`), JUnit 6. 테스트 스타터는 새 의존성 이름이라 승인 필요 | Boot 4.1.2 공식 문서와 4.0 마이그레이션 가이드로 확인(2026-11-11). `@WebMvcTest`가 `spring-boot-webmvc-test` 모듈로 분리됨 | TRD 1 |
 | TD-30 | id 검사 위치와 415/406 (재검토 반영) | id 형식·범위 검사는 컨트롤러에서 직접 한다(`Converter`, 파라미터 순서 의존 없음). 415/406은 D-37에 따라 `MALFORMED_REQUEST`(400)로 변환 | 순서를 정하지 않기로 했으므로 단순한 쪽을 택함(TD-22). catch-all 처리기가 있으면 변환하지 않은 415/406이 500이 되므로 명시적으로 변환 | TRD 3.3, 3.2 |
-| TD-31 | 커버리지 검증 연결 (재검토 반영) | `jacocoTestCoverageVerification`을 `check`에 연결 | `./gradlew build`만으로 80% 기준(2.4.2)이 지켜짐 | TRD 1, 9 |/
+| TD-31 | 커버리지 검증 연결 (재검토 반영) | `jacocoTestCoverageVerification`을 `check`에 연결 | `./gradlew build`만으로 80% 기준(2.4.2)이 지켜짐 | TRD 1, 9 |
 | TD-32 | 멈추는 규칙 (재검토 반영) | 명세에 없는 프레임워크 수준 오류는 기존 코드 중 하나로 보내고 새 문구는 만들지 않는다. D-34, D-35는 유지하고 415/406은 D-31로 흡수(D-37) | Spring 기본 오류 응답은 `{error:{code,message}}`와 모양이 달라 FR-14, AC-14-1, 헌법 2.4.3을 어김. 반대로 새 문구가 계속 늘어나는 것도 막아야 함 | TRD 6 |
 
 ## 명세로 올려 승인된 항목

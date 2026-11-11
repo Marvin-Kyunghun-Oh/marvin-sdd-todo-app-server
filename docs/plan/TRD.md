@@ -18,7 +18,7 @@
 
 - **호환성 확인 (2026-11-11, 공식 문서):** Boot 4.1.2는 Java 17 이상(27까지)과 Gradle "8.x(8.14 이상) 및 9.x"를 지원한다. 반면 Boot 3.5.16은 Gradle "7.6.4 이상 또는 8.4 이상 8.x"만 적혀 있어 Gradle 9.8.2와 맞지 않는다. 그래서 초안의 "3.x"를 4.1.2로 확정했다 (TD-23).
 - 입력 검증은 직접 구현한다. D-28(코드포인트 단위 글자 수)과 D-03/D-27(공백 제거)이 표준 어노테이션과 맞지 않아 `spring-boot-starter-validation`은 추가하지 않는다 (CLAUDE.md 2.1.5, 2.5.1).
-- **Boot 4 이름 확인 (2026-11-11, Spring Boot 4.1.2 공식 문서와 4.0 마이그레이션 가이드):** `spring-boot-starter-web`은 `spring-boot-starter-webmvc`로 대체되어 deprecated이고, 테스트 스타터는 `spring-boot-starter-<기술>-test` 형식이며 `spring-boot-starter-webmvc-test`가 있다. `@WebMvcTest`는 `spring-boot-webmvc-test` 모듈에 있고, 공식 문서는 JUnit 6과 Jackson 3(`tools.jackson`, 3.1.7)을 기준으로 한다. `@MockBean`은 제거되어 `@MockitoBean`을 쓴다. 따라서 초안의 "JUnit 6"는 "JUnit 6"으로 고쳤다 (TD-29).
+- **Boot 4 이름 확인 (2026-11-11, Spring Boot 4.1.2 공식 문서와 4.0 마이그레이션 가이드):** `spring-boot-starter-web`은 `spring-boot-starter-webmvc`로 대체되어 deprecated이고, 테스트 스타터는 `spring-boot-starter-<기술>-test` 형식이며 `spring-boot-starter-webmvc-test`가 있다. `@WebMvcTest`는 `spring-boot-webmvc-test` 모듈에 있고, 공식 문서는 JUnit 6과 Jackson 3(`tools.jackson`, 3.1.7)을 기준으로 한다. `@MockBean`은 제거되어 `@MockitoBean`을 쓴다. 따라서 초안의 "JUnit 5"는 "JUnit 6"으로 고쳤다 (TD-29).
 - 새 의존성 추가는 위 표가 전부다(테스트 스타터 승인됨). 더 필요하면 사람의 승인을 받는다 (CLAUDE.md 2.5.1).
 - JaCoCo 검증은 `check`에 연결한다: `tasks.check { dependsOn(tasks.jacocoTestCoverageVerification) }`. `./gradlew build`만으로 라인 80% 미만이 실패한다 (TD-31).
 
@@ -169,7 +169,7 @@ JSON, 필드는 camelCase, 상태 값은 영어 (TD-04).
 - **샘플 데이터 Runner (TD-13):**
   - 단위: `TodoService` 목 + `Clock.fixed`로 만들어진 항목의 개수, 상대 마감일, 완료 항목 포함 여부를 검증한다.
   - 통합: `local` 프로파일을 켠 컨텍스트에서 샘플이 채워지는지, 프로파일이 없을 때는 비어 있는지를 검증한다. 두 번째가 다른 테스트에서 샘플이 섞이지 않음을 보장한다.
-- AC-06-5, AC-08-7, AC-12-3, AC-14-4~7, AC-09-4(문자열이 아닌 dueDate)도 같은 방식으로 테스트한다. 웹 슬라이스에서 코드와 정확한 문구를, 통합 테스트에서 실제 404/405/500 응답을 확인한다.
+- AC-06-5, AC-08-7, AC-12-3, AC-14-3(415/406), AC-14-4~6, AC-09-4(문자열이 아닌 dueDate)도 같은 방식으로 테스트한다. 웹 슬라이스에서 코드와 정확한 문구를, 통합 테스트에서 실제 404/405/500 응답을 확인한다.
 - 커버리지는 JaCoCo로 측정한다. `jacocoTestCoverageVerification`(라인 80% 미만이면 실패)을 `check`에 연결하므로 `./gradlew build`만으로 기준이 지켜진다 (CLAUDE.md 2.4.2, TD-31).
 
 ## 10. FR 추적표
