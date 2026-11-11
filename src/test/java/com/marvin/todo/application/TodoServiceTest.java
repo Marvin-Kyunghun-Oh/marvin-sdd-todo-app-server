@@ -2,7 +2,9 @@ package com.marvin.todo.application;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.stream.Stream;
 
 import com.marvin.todo.domain.NewTodo;
@@ -88,5 +90,139 @@ class TodoServiceTest {
                 .isInstanceOf(TodoException.class);
 
         verifyNoInteractions(repository);
+    }
+
+    @Test
+    @DisplayName("AC-03-1 할 일 \"가\", \"나\", \"다\"가 이 순서로 등록되어 있을 때 목록을 보면 \"가\", \"나\", \"다\" 순서로 돌아온다")
+    void 목록은_저장소가_준_순서를_유지한다() {
+        when(repository.findAll()).thenReturn(List.of(
+                new Todo(1L, "가", null, null, false),
+                new Todo(2L, "나", null, null, false),
+                new Todo(3L, "다", null, null, false)));
+
+        ListResult result = service.list(StatusFilter.ALL);
+
+        assertThat(result.items()).extracting(view -> view.todo().title()).containsExactly("가", "나", "다");
+    }
+
+    @Test
+    @DisplayName("AC-03-2 마감일이나 완료 여부가 서로 다른 할 일들이 있을 때 목록을 보면 마감일이나 완료 여부와 관계없이 등록한 순서를 유지한다")
+    void 마감일이나_완료_여부와_관계없이_순서를_바꾸지_않는다() {
+        when(repository.findAll()).thenReturn(List.of(
+                new Todo(1L, "가", null, LocalDate.of(2026, 12, 1), true),
+                new Todo(2L, "나", null, LocalDate.of(2026, 11, 1), false),
+                new Todo(3L, "다", null, null, true)));
+
+        ListResult result = service.list(StatusFilter.ALL);
+
+        assertThat(result.items()).extracting(view -> view.todo().id()).containsExactly(1L, 2L, 3L);
+    }
+
+    @Test
+    @DisplayName("AC-03-3 목록을 보면 각 할 일에 대해 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 함께 돌아온다")
+    void 각_항목에_다섯_값이_담긴다() {
+        Todo todo = new Todo(1L, "가", "설명", LocalDate.of(2026, 11, 12), false);
+        when(repository.findAll()).thenReturn(List.of(todo));
+
+        TodoView view = service.list(StatusFilter.ALL).items().get(0);
+
+        assertThat(view.todo()).isEqualTo(todo);
+        assertThat(view.overdue()).isFalse();
+    }
+
+    @Test
+    @DisplayName("AC-09-3 마감일이 없는 할 일이 있을 때 목록을 보면 마감일 없음으로 돌아온다")
+    void 마감일이_없으면_null로_돌아온다() {
+        when(repository.findAll()).thenReturn(List.of(new Todo(1L, "가", null, null, false)));
+
+        assertThat(service.list(StatusFilter.ALL).items().get(0).todo().dueDate()).isNull();
+    }
+
+    private static List<Todo> 진행_중_3개_완료_1개() {
+        return List.of(
+                new Todo(1L, "가", null, null, false),
+                new Todo(2L, "나", null, null, false),
+                new Todo(3L, "다", null, null, true),
+                new Todo(4L, "라", null, null, false));
+    }
+
+    @Test
+    @DisplayName("AC-04-3 진행 중 3개, 완료 1개가 있을 때 전체를 보면 4개가 모두 돌아온다")
+    void 전체_보기는_모두_돌려준다() {
+        when(repository.findAll()).thenReturn(진행_중_3개_완료_1개());
+
+        assertThat(service.list(StatusFilter.ALL).items()).hasSize(4);
+    }
+
+    @Test
+    @DisplayName("AC-04-1 진행 중 3개, 완료 1개가 있을 때 진행 중만 보면 진행 중 3개만 등록 순서대로 돌아온다")
+    void 진행_중_보기는_진행_중만_순서대로_돌려준다() {
+        when(repository.findAll()).thenReturn(진행_중_3개_완료_1개());
+
+        assertThat(service.list(StatusFilter.ACTIVE).items())
+                .extracting(view -> view.todo().title()).containsExactly("가", "나", "라");
+    }
+
+    @Test
+    @DisplayName("AC-04-2 진행 중 3개, 완료 1개가 있을 때 완료만 보면 완료 1개만 돌아온다")
+    void 완료_보기는_완료만_돌려준다() {
+        when(repository.findAll()).thenReturn(진행_중_3개_완료_1개());
+
+        assertThat(service.list(StatusFilter.DONE).items())
+                .extracting(view -> view.todo().title()).containsExactly("다");
+    }
+
+    @Test
+    @DisplayName("AC-04-4 완료된 할 일이 하나도 없을 때 완료만 보면 오류 없이 빈 목록이 돌아온다")
+    void 완료가_없으면_완료_보기는_빈_목록이다() {
+        when(repository.findAll()).thenReturn(List.of(new Todo(1L, "가", null, null, false)));
+
+        assertThat(service.list(StatusFilter.DONE).items()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("AC-05-1 진행 중 3개, 완료 1개가 있을 때 요약을 보면 전체 4, 진행 중 3, 완료 1, 남은 개수 3이 돌아온다")
+    void 요약은_전체_진행_중_완료_남은_개수를_센다() {
+        when(repository.findAll()).thenReturn(진행_중_3개_완료_1개());
+
+        assertThat(service.list(StatusFilter.ALL).summary()).isEqualTo(new Summary(4, 3, 1, 3));
+    }
+
+    @Test
+    @DisplayName("AC-05-2 진행 중 3개, 완료 1개가 있을 때 완료만 보면서 요약을 함께 받으면 요약 값은 위와 같고, 보기 선택에 영향을 받지 않는다")
+    void 요약은_보기_선택에_영향을_받지_않는다() {
+        when(repository.findAll()).thenReturn(진행_중_3개_완료_1개());
+
+        assertThat(service.list(StatusFilter.DONE).summary()).isEqualTo(new Summary(4, 3, 1, 3));
+        assertThat(service.list(StatusFilter.ACTIVE).summary()).isEqualTo(new Summary(4, 3, 1, 3));
+    }
+
+    @Test
+    @DisplayName("AC-05-3 할 일이 하나도 없을 때 요약을 보면 전체 0, 진행 중 0, 완료 0, 남은 개수 0이 돌아온다")
+    void 할_일이_없으면_요약은_모두_0이다() {
+        when(repository.findAll()).thenReturn(List.of());
+
+        assertThat(service.list(StatusFilter.ALL).summary()).isEqualTo(new Summary(0, 0, 0, 0));
+    }
+
+    @Test
+    @DisplayName("AC-13-1 할 일이 하나도 없을 때 목록을 보면 오류 없이 빈 목록과 모든 개수 0이 돌아온다")
+    void 할_일이_없으면_빈_목록과_0_요약이_돌아온다() {
+        when(repository.findAll()).thenReturn(List.of());
+
+        ListResult result = service.list(StatusFilter.ALL);
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.summary()).isEqualTo(new Summary(0, 0, 0, 0));
+    }
+
+    @Test
+    @DisplayName("목록과 요약은 한 번 조회한 결과에서 함께 계산한다 (TRD 3.1)")
+    void 목록과_요약은_저장소를_한_번만_조회한다() {
+        when(repository.findAll()).thenReturn(진행_중_3개_완료_1개());
+
+        service.list(StatusFilter.DONE);
+
+        verify(repository, times(1)).findAll();
     }
 }
