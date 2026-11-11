@@ -88,10 +88,28 @@
 
 ## 4. 기술 스택 / 명령어
 
-> 2단계(기술 계획)에서 작성한다.
+> 근거: 기술 계획 문서 `docs/plan/`의 `TRD.md`(결정과 구현 정책), `DATA_MODEL.md`(데이터 규칙), `API_SPEC.md`(호출 계약), `DECISION_LOG.md`(TD 결정 기록). 모두 확정 2026-11-11.
+
+### 스택
+- Java 21, Spring Boot 4.1.2 (`spring-boot-starter-webmvc`), Gradle 9.8.2 (Kotlin DSL, wrapper)
+- 테스트: JUnit 6 + Mockito (`spring-boot-starter-webmvc-test`), 커버리지: JaCoCo (라인 80% 이상)
+- 저장소: 인메모리 (영속성 없음)
+- 새 의존성은 사람의 승인 후에만 추가한다 (2.5.1).
+
+### 레이어 (`com.marvin.todo`)
+- `presentation` → `application` → `domain` ← `persistence`, 조립은 `config`. 참조 규칙은 TRD 2장.
+
+### 명령어
+> Gradle 프로젝트는 3단계의 첫 작업에서 만든다. 만들어진 뒤부터 아래 명령을 쓴다.
+- 빌드: `./gradlew build`
+- 테스트: `./gradlew test`
+- 커버리지 검증: `./gradlew jacocoTestCoverageVerification` (`check`에 연결되어 있어 `build`에도 포함)
+- 로컬 실행(샘플 데이터 포함): `./gradlew bootRun --args='--spring.profiles.active=local'`
 
 ## 변경 이력
 
 | 날짜 | 변경 내용 | 사유 | 승인             |
 | --- | --- | --- |----------------|
 | 2026-11-10 | 초안 작성 | SDD 0단계 | 승인 (Marvin-Oh) |
+| 2026-11-11 | 4장(기술 스택/명령어) 작성. 2장 변경 아님 | SDD 2단계, TRD 확정 | 승인 (Marvin-Oh) |
+| 2026-11-11 | 4장 근거 문서에 DATA_MODEL, API_SPEC 추가. 2장 변경 아님 | SDD 2단계 확정 | 승인 (Marvin-Oh) |
