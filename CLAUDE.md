@@ -106,7 +106,6 @@
 - `presentation` → `application` → `domain` ← `persistence`, 조립은 `config`. 참조 규칙은 TRD 2장.
 
 ### 명령어
-> Gradle 프로젝트는 3단계의 첫 작업에서 만든다. 만들어진 뒤부터 아래 명령을 쓴다.
 - 빌드: `./gradlew build`
 - 테스트: `./gradlew test`
 - 커버리지 검증: `./gradlew jacocoTestCoverageVerification` (`check`에 연결되어 있어 `build`에도 포함)
@@ -121,3 +120,4 @@
 | 2026-11-11 | 4장 근거 문서에 DATA_MODEL, API_SPEC 추가. 2장 변경 아님 | SDD 2단계 확정 | 승인 (Marvin-Oh) |
 | 2026-11-11 | 2.6에 5항 추가: 문서는 사람용 요약과 에이전트용 상세로 나눠 쓴다 | 2단계 문서가 사람에게 읽히지 않아 승인 판단이 어려움 | 승인 (Marvin-Oh) |
 | 2026-11-11 | 3단계 작업 목록(`docs/tasks/TASKS.md`) 확정. 2장·4장 변경 아님 | SDD 3단계 확정 | 승인 (Marvin-Oh) |
+| 2026-11-11 | 4장의 "Gradle 프로젝트는 3단계의 첫 작업에서 만든다" 안내 삭제. 2장 변경 아님 | SDD 4단계 T24, 프로젝트 골격이 만들어짐 | 승인 (Marvin-Oh) |
