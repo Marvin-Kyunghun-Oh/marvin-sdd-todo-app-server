@@ -38,12 +38,15 @@
 | TD-31 | 커버리지 검증 연결 (재검토 반영) | `jacocoTestCoverageVerification`을 `check`에 연결 | `./gradlew build`만으로 80% 기준(2.4.2)이 지켜짐 | TRD 1, 9 |
 | TD-32 | 멈추는 규칙 (재검토 반영) | 명세에 없는 프레임워크 수준 오류는 기존 코드 중 하나로 보내고 새 문구는 만들지 않는다. D-34, D-35는 유지하고 415/406은 D-31로 흡수(D-37) | Spring 기본 오류 응답은 `{error:{code,message}}`와 모양이 달라 FR-14, AC-14-1, 헌법 2.4.3을 어김. 반대로 새 문구가 계속 늘어나는 것도 막아야 함 | TRD 6 |
 | TD-33 | "공백"의 범위 | 유니코드 공백(`String.strip()`). 전각 공백(U+3000) 포함. U+00A0, U+200B 등은 공백으로 보지 않는 한계를 인정 | 한글 입력에서 전각 공백만 넣은 제목이 AC-02-2를 우회하지 않게 함 | DATA_MODEL 2.1 |
-| TD-34 | 마감일 텍스트 엄격도 | `YYYY-MM-DD`(ASCII 숫자 4-2-2, 실제 달력 날짜)만 허용. 앞뒤 공백 미제거, `""`은 `INVALID_DUE_DATE`. 지우는 방법은 `null` 하나 | 마감일 없음의 표현을 하나로 유지(TD-18). 날짜 패턴만으로는 5자리 연도가 통과하므로 정규식으로 먼저 거름 | DATA_MODEL 2.3 |
+| TD-34 | 마감일 텍스트 엄격도 (D-38로 수정) | 설명과 같은 규칙: 앞뒤 공백 제거 후 비면(`""`, 공백뿐) 마감일 없음, 아니면 제거한 값을 `YYYY-MM-DD`(ASCII 숫자 4-2-2, 실제 달력 날짜)로 엄격 파싱. 지우는 방법은 `null`, `""`, 공백뿐인 문자열 | `""`이 설명(D-27)과 반대로 오류가 되는 불일치를 없애고 빈 마감일을 보내는 클라이언트를 허용. 사용자에게 보이는 동작이라 명세 D-38, AC-09-6으로 올림. 날짜 패턴만으로는 5자리 연도가 통과하므로 정규식으로 먼저 거름 | DATA_MODEL 2.3 |
 | TD-35 | 저장소 계약 위치와 반환형 | 계약은 DATA_MODEL 6장이 기준, TRD 3.1은 링크만. `findById`/`update`는 `Optional`, `findAll`은 id 오름차순 불변 `List`, `deleteById`는 `boolean`. `update`가 id를 바꾸면 거부 | 기준 문서가 둘이 되는 것을 방지(TD-28) | DATA_MODEL 6, TRD 3.1 |
-| TD-36 | 불변식 위치와 입력 타입 | `Todo`는 `record`, 정규화와 검증은 도메인 팩토리 한 곳. `NewTodo(title)`, 수정 입력은 `(title, description, dueDateText, completed)`로 기존 값을 교체 | 규칙을 어긴 `Todo`가 존재할 수 없게 함. FR-01·D-06은 추가 시 제목만 받음 | DATA_MODEL 2, 4 |
+| TD-36 | 불변식 위치와 입력 타입 (TD-40으로 보완) | `Todo`는 `record`. 정규화와 검증은 도메인 팩토리 한 곳, 마지막 확인은 compact 생성자. 입력은 원시(`application` 명령 객체)와 검증됨(`NewTodo`, `TodoUpdate`)으로 나눔. 수정은 기존 값을 교체 | FR-01·D-06은 추가 시 제목만 받음 | DATA_MODEL 2, 4 |
 | TD-37 | 기준 시각과 요약 정의 | "오늘"은 요청 처리마다 `LocalDate.now(clock)` 한 번. 요약은 `application` 값 객체로 `findAll()` 스냅샷에서 계산, `remaining = active` | 한 응답 안의 항목이 서로 다른 "오늘"을 쓰지 않게 함(AC-05-2) | DATA_MODEL 3 |
 | TD-38 | 상태별 보기 필터 위치 | 저장소가 아니라 `application`이 `findAll()` 결과를 거름 | 필터와 요약이 같은 스냅샷에서 나와 어긋나지 않음. 저장소 계약이 작아짐(YAGNI) | DATA_MODEL 6 |
-| TD-39 | DTO 변환 규칙 | 요청 DTO(`dueDate`는 `JsonNode`) → `presentation` 매퍼 → `NewTodo`/수정 입력 → `Todo` → 응답 DTO. 정규화는 `domain`만 한다. `dueDate`는 ISO 문자열 또는 `null`, `description` 없음도 `null`로 내보냄 | CLAUDE.md 2.3.2, 2.3.3, TD-20 | DATA_MODEL 5 |
+| TD-39 | DTO 변환 규칙 (TD-41 반영) | 요청 DTO(`dueDate`는 `JsonNode`) → `presentation` 매퍼 → `NewTodo`/수정 입력 → `Todo` → 응답 DTO. 정규화는 `domain`만 한다. `dueDate`는 ISO 문자열 또는 `null`, `description` 없음도 `null`로 내보냄 | CLAUDE.md 2.3.2, 2.3.3, TD-20 | DATA_MODEL 5 |
+| TD-40 | 생성 흐름과 불변식 보장 (DATA_MODEL 검토 반영) | 원시 입력은 `application`의 명령 객체(문자열). 도메인 팩토리(`NewTodo.of`, `TodoUpdate.of`)가 정규화·검증하고 입력 오류는 오류 코드를 가진 도메인 예외로 던짐. `Todo`·`NewTodo`·`TodoUpdate`의 compact 생성자가 불변식(id ≥ 1, 길이 등)을 다시 확인하고 어기면 `IllegalArgumentException`(→ `INTERNAL_ERROR`). 저장소는 검증된 `NewTodo`에 id만 붙임 | `record` 생성자는 public이라 팩토리 우회가 가능. 이전 문서의 "팩토리에서만 생성"과 "id는 저장소가 발급"이 모순이었음 | DATA_MODEL 2, 4, 6 |
+| TD-41 | `overdue` 계산 주체 (DATA_MODEL 검토 반영) | 판정식은 `Todo.isOverdue(today)`(domain). `application`이 `Clock`으로 오늘을 한 번 계산해 `TodoView(todo, overdue)`와 `ListResult(items, summary)`를 돌려주고 `presentation` 매퍼는 옮겨 담기만 함 | `presentation`이 `Clock`에 의존하지 않게 함(TD-26) | DATA_MODEL 3.2, 5.3, TRD 2 |
+| TD-42 | 수정 흐름 순서 (DATA_MODEL 검토 반영) | `findById` → 도메인 검증 → `update(id, old -> old.apply(검증된 값))`. 완료 표시는 검증 없이 `update`만 | 없는 id의 404가 값 검증보다 먼저(TD-19)이고 검증 실패 시 저장소를 건드리지 않음(AC-08-3) | DATA_MODEL 6 |
 
 ## 명세로 올려 승인된 항목
 TRD가 정하지 않고 `docs/spec/`에 올려 승인받은 항목은 D-32(`completed` 누락), D-33(id가 번호가 아님), D-34(500), D-35(없는 경로/허용되지 않은 메서드)이다. TRD 6장의 표시는 지웠다.

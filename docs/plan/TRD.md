@@ -31,7 +31,7 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
 | 패키지 (`com.marvin.todo`) | 책임 | 근거 |
 | --- | --- | --- |
 | `presentation` | 컨트롤러, 요청/응답 DTO, 전역 오류 처리기 | FR-14, CLAUDE.md 2.3.3 |
-| `application` | `TodoService`: 유스케이스 조합, 요약 계산 | FR-05, FR-06 |
+| `application` | `TodoService`: 유스케이스 조합, 오늘 계산(`Clock`), `TodoView`·요약(`ListResult`) 생성 | FR-05, FR-06, TD-41 |
 | `domain` | `Todo`, 입력 검증, 기한 지남 판정, `TodoRepository` 인터페이스, 도메인 예외 | FR-02, FR-10 |
 | `persistence` | `InMemoryTodoRepository` | TD-02, CLAUDE.md 2.3.2 |
 | `config` | `Clock` 빈, 샘플 데이터 `ApplicationRunner`, Jackson 설정 | TD-13, TD-21, CLAUDE.md 2.3.4 |
@@ -59,7 +59,7 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
 - `title`이 없거나 `null`이면 비어 있는 제목으로 보고 `TITLE_REQUIRED`다 (AC-02-1). `description`이 문자열이 아니면 `MALFORMED_REQUEST`다.
 - **`dueDate`는 요청 DTO에서 원본 JSON 값(`tools.jackson.databind.JsonNode`)으로 받는다.** `LocalDate`로 받으면 `"abc"`와 `2026-02-30`이 Jackson 단계에서 실패해 `MALFORMED_REQUEST`가 되어 AC-09-4가 깨진다. `String`으로 받는 것도 안 된다. 같은 절에서 강제 변환을 끄므로 `dueDate: 123`이 Jackson 단계에서 `MALFORMED_REQUEST`가 된다. 변환은 `presentation`의 매퍼가 한다.
   - 값이 없거나 `null`이면 마감일 없음으로 넘긴다.
-  - 문자열이면 그 문자열을 `application`에 넘기고, 파싱은 `domain`이 ISO `YYYY-MM-DD`로 직접 한다. 실패하면 `INVALID_DUE_DATE`다.
+  - 문자열이면 그 문자열을 `application`에 넘기고, 파싱은 `domain`이 한다. 앞뒤 공백을 제거해 비면(`""` 포함) 마감일 없음이고, 아니면 ISO `YYYY-MM-DD`로 파싱하며 실패하면 `INVALID_DUE_DATE`다 (D-38, AC-09-6).
   - 문자열이 아닌 값(`123`, `true`, 객체, 배열)은 JSON 원문 텍스트(예: `"123"`)를 문자열로 넘긴다. ISO 날짜 모양이 될 수 없으므로 도메인 파싱에서 `INVALID_DUE_DATE`가 되고, 검증 순서(제목→설명→마감일)도 그대로 지켜진다.
   - 이렇게 하면 `domain`과 `application`은 Jackson 타입을 모른다 (CLAUDE.md 2.3.2). 문자열이 아닌 `dueDate`를 날짜 오류로 보는 해석은 AC-09-4와 AC-14-3이 겹치는 부분이라 D-36으로 명세에 남긴다 (D-36, TD-20).
 - Content-Type이 없거나 JSON이 아닌 요청(415)과 Accept가 JSON이 아닌 요청(406)은 D-31 범위에 포함되어 `MALFORMED_REQUEST`(400)로 응답한다. 새 문구는 만들지 않는다. 오류 처리기가 명시적으로 변환하지 않으면 catch-all 처리기에서 500이 되므로 변환 규칙을 둔다 (D-37, TD-30, TD-32).
@@ -79,7 +79,7 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
 ## 4. 도메인 모델 (FR-01, FR-08, FR-09, TD-03, TD-28)
 상세는 [`DATA_MODEL.md`](DATA_MODEL.md)가 기준이다. 요약만 남긴다.
 - `Todo`: `id`(long), `title`, `description`(null 허용), `dueDate`(`LocalDate`, null 허용), `completed`. 불변 `record`이고 도메인 팩토리를 거쳐야만 만들어진다 (DATA_MODEL 1, 2).
-- 공백 제거는 유니코드 공백(`strip()`), 글자 수는 코드포인트, 마감일 텍스트는 엄격한 `YYYY-MM-DD` (D-03, D-27, D-28, TD-10, TD-33, TD-34).
+- 공백 제거는 유니코드 공백(`strip()`), 글자 수는 코드포인트, 마감일 텍스트는 공백 제거 후 비면 없음, 아니면 엄격한 `YYYY-MM-DD` (D-03, D-27, D-28, TD-10, TD-33, TD-34).
 - 기한 지남(`overdue`)과 요약은 저장하지 않고 요청마다 `Clock` 기준 오늘로 계산한다 (FR-05, FR-10, DATA_MODEL 3).
 - id가 곧 등록 순서다 (D-11, FR-03).
 
@@ -103,7 +103,7 @@ JSON, 필드는 camelCase, 상태 값은 영어 (TD-04).
 
 **수정(PUT) 규칙 (TD-18):** `title`과 `completed`는 필수다(`title` 누락은 `TITLE_REQUIRED`, `completed` 누락은 `MALFORMED_REQUEST`, D-32). `description`, `dueDate`는 생략하거나 `null`이면 없음으로 저장하므로 "필드 없음"과 "삭제"를 구분하지 않는다 (AC-09-2, AC-08-5). `PATCH`의 본문은 `completed` 하나뿐이다.
 
-**날짜:** ISO `YYYY-MM-DD` 문자열이다. 파싱에 실패하는 값은 모두 `INVALID_DUE_DATE`다 (AC-09-4, TD-07, TD-20).
+**날짜:** ISO `YYYY-MM-DD` 문자열이다. 공백 제거 후 비어 있으면 마감일 없음이고(D-38), 그 밖에 파싱에 실패하는 값은 모두 `INVALID_DUE_DATE`다 (AC-09-4, TD-07, TD-20).
 
 ## 6. 오류 응답 (FR-14, TD-08, TD-15)
 모든 실패는 같은 구성이다 (AC-14-1):
@@ -163,7 +163,7 @@ JSON, 필드는 camelCase, 상태 값은 영어 (TD-04).
 - **샘플 데이터 Runner (TD-13):**
   - 단위: `TodoService` 목 + `Clock.fixed`로 만들어진 항목의 개수, 상대 마감일, 완료 항목 포함 여부를 검증한다.
   - 통합: `local` 프로파일을 켠 컨텍스트에서 샘플이 채워지는지, 프로파일이 없을 때는 비어 있는지를 검증한다. 두 번째가 다른 테스트에서 샘플이 섞이지 않음을 보장한다.
-- AC-06-5, AC-08-7, AC-12-3, AC-14-3(415/406), AC-14-4~6, AC-09-4(문자열이 아닌 dueDate)도 같은 방식으로 테스트한다. 웹 슬라이스에서 코드와 정확한 문구를, 통합 테스트에서 실제 404/405/500 응답을 확인한다.
+- AC-06-5, AC-08-7, AC-12-3, AC-14-3(415/406), AC-14-4~6, AC-09-4(문자열이 아닌 dueDate), AC-09-6(빈 마감일)도 같은 방식으로 테스트한다. 웹 슬라이스에서 코드와 정확한 문구를, 통합 테스트에서 실제 404/405/500 응답을 확인한다.
 - 커버리지는 JaCoCo로 측정한다. `jacocoTestCoverageVerification`(라인 80% 미만이면 실패)을 `check`에 연결하므로 `./gradlew build`만으로 기준이 지켜진다 (CLAUDE.md 2.4.2, TD-31).
 
 ## 10. FR 추적표
