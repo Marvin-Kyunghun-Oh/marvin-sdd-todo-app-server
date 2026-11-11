@@ -101,6 +101,16 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.error.message").value("요청한 주소를 찾을 수 없어요."));
     }
 
+    @ParameterizedTest
+    @CsvSource({"GET", "POST"})
+    @DisplayName("스프링 기본 오류 주소 `/error`도 표에 없는 경로이므로 \"요청한 주소를 찾을 수 없어요.\"라는 안내가 같은 구성으로 돌아온다 (API_SPEC 1.1, TD-53)")
+    void 기본_오류_주소도_없는_주소로_응답한다(String method) throws Exception {
+        mockMvc.perform(request(HttpMethod.valueOf(method), "/error"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("ENDPOINT_NOT_FOUND"))
+                .andExpect(jsonPath("$.error.message").value("요청한 주소를 찾을 수 없어요."));
+    }
+
     @Test
     @DisplayName("AC-14-6 서버가 제공하는 주소에 허용되지 않는 요청 방식으로 요청할 때 처리하면 \"지원하지 않는 요청 방식이에요.\"라는 안내가 같은 구성으로 돌아온다")
     void 실제_서버에서_허용되지_않는_방식은_405다() throws Exception {
