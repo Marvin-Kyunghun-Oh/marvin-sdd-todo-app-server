@@ -15,4 +15,8 @@ public record Todo(long id, String title, String description, LocalDate dueDate,
     public boolean isOverdue(LocalDate today) {
         return !completed && dueDate != null && dueDate.isBefore(today);
     }
+
+    public Todo apply(TodoUpdate update) {
+        return new Todo(id, update.title(), update.description(), update.dueDate(), update.completed());
+    }
 }

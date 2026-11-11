@@ -8,6 +8,7 @@ import com.marvin.todo.domain.NewTodo;
 import com.marvin.todo.domain.Todo;
 import com.marvin.todo.domain.TodoErrorCode;
 import com.marvin.todo.domain.TodoException;
+import com.marvin.todo.domain.TodoUpdate;
 import com.marvin.todo.domain.TodoRepository;
 
 public class TodoService {
@@ -35,13 +36,25 @@ public class TodoService {
     }
 
     public TodoView get(long id) {
-        Todo todo = repository.findById(id).orElseThrow(() -> new TodoException(TodoErrorCode.TODO_NOT_FOUND));
+        Todo todo = repository.findById(id).orElseThrow(TodoService::notFound);
         return new TodoView(todo, todo.isOverdue(LocalDate.now(clock)));
     }
 
     public void delete(long id) {
         if (!repository.deleteById(id)) {
-            throw new TodoException(TodoErrorCode.TODO_NOT_FOUND);
+            throw notFound();
         }
+    }
+
+    public TodoView update(long id, UpdateTodoCommand command) {
+        repository.findById(id).orElseThrow(TodoService::notFound);
+        TodoUpdate update = TodoUpdate.of(command.title(), command.description(), command.dueDateText(), command.completed());
+        Todo updated = repository.update(id, current -> current.apply(update))
+                .orElseThrow(TodoService::notFound);
+        return new TodoView(updated, updated.isOverdue(LocalDate.now(clock)));
+    }
+
+    private static TodoException notFound() {
+        return new TodoException(TodoErrorCode.TODO_NOT_FOUND);
     }
 }

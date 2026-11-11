@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import com.marvin.todo.domain.NewTodo;
@@ -20,12 +21,18 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -386,6 +393,158 @@ class TodoServiceTest {
 
             verify(repository).deleteById(99L);
             verifyNoMoreInteractions(repository);
+        }
+    }
+
+    @Nested
+    @DisplayName("수정")
+    class Update {
+
+        private final Todo existing = new Todo(1L, "PRD 초안", null, null, false);
+
+        private void 기존_할_일이_있다(Todo todo) {
+            when(repository.findById(todo.id())).thenReturn(Optional.of(todo));
+        }
+
+        @SuppressWarnings("unchecked")
+        private void 교체하면_변경이_적용된다(Todo todo) {
+            when(repository.update(eq(todo.id()), any())).thenAnswer(invocation ->
+                    Optional.of(((UnaryOperator<Todo>) invocation.getArgument(1)).apply(todo)));
+        }
+
+        private TodoView 수정한다(String title, String description, String dueDateText, boolean completed) {
+            기존_할_일이_있다(existing);
+            교체하면_변경이_적용된다(existing);
+            return service.update(1L, new UpdateTodoCommand(title, description, dueDateText, completed));
+        }
+
+        @Test
+        @DisplayName("AC-08-1 제목 \"PRD 초안\", 마감일 없음인 할 일이 있을 때 제목을 \"PRD 초안 작성하기\", 설명을 \"목적과 범위 정리\", 마감일을 2026-11-12로 저장하면 세 값이 모두 반영되어 돌아온다")
+        void 세_값이_모두_반영된다() {
+            TodoView view = 수정한다("PRD 초안 작성하기", "목적과 범위 정리", "2026-11-12", false);
+
+            assertThat(view.todo().title()).isEqualTo("PRD 초안 작성하기");
+            assertThat(view.todo().description()).isEqualTo("목적과 범위 정리");
+            assertThat(view.todo().dueDate()).isEqualTo(LocalDate.of(2026, 11, 12));
+            assertThat(view.todo().id()).isEqualTo(1L);
+        }
+
+        @Test
+        @DisplayName("AC-08-2 진행 중인 할 일이 있을 때 수정에서 완료로 표시하여 저장하면 완료 상태가 된다")
+        void 완료로_표시하여_저장하면_완료다() {
+            assertThat(수정한다("PRD 초안", null, null, true).todo().completed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("AC-08-5 설명이 \"목적과 범위 정리\"인 할 일이 있을 때 설명을 비워서 저장하면 설명 없음이 된다")
+        void 설명을_비우면_설명_없음이다() {
+            Todo withDescription = new Todo(1L, "PRD 초안", "목적과 범위 정리", null, false);
+            기존_할_일이_있다(withDescription);
+            교체하면_변경이_적용된다(withDescription);
+
+            TodoView view = service.update(1L, new UpdateTodoCommand("PRD 초안", "", null, false));
+
+            assertThat(view.todo().description()).isNull();
+        }
+
+        @Test
+        @DisplayName("AC-08-6 설명이 없는 할 일이 있을 때 설명을 공백 문자로만 채워 저장하면 설명 없음으로 저장된다")
+        void 설명을_공백으로_채우면_설명_없음이다() {
+            assertThat(수정한다("PRD 초안", "  \t　", null, false).todo().description()).isNull();
+        }
+
+        @Test
+        @DisplayName("AC-09-1 마감일이 없는 할 일이 있을 때 마감일 2026-11-12를 지정하면 마감일이 2026-11-12로 저장된다")
+        void 마감일을_지정하면_저장된다() {
+            assertThat(수정한다("PRD 초안", null, "2026-11-12", false).todo().dueDate())
+                    .isEqualTo(LocalDate.of(2026, 11, 12));
+        }
+
+        @Test
+        @DisplayName("AC-09-2 마감일이 있는 할 일이 있을 때 마감일을 지우면 마감일 없음 상태가 되고, 기한 지남이 아니다")
+        void 마감일을_지우면_마감일_없음이고_기한_지남이_아니다() {
+            Todo withDueDate = new Todo(1L, "PRD 초안", null, LocalDate.of(2026, 11, 1), false);
+            기존_할_일이_있다(withDueDate);
+            교체하면_변경이_적용된다(withDueDate);
+
+            TodoView view = service.update(1L, new UpdateTodoCommand("PRD 초안", null, null, false));
+
+            assertThat(view.todo().dueDate()).isNull();
+            assertThat(view.overdue()).isFalse();
+        }
+
+        @Test
+        @DisplayName("AC-09-5 오늘이 2026-11-10일 때 마감일을 2026-11-01로 지정하면 저장되고 기한 지남이다")
+        void 과거_마감일도_저장되고_기한_지남이다() {
+            TodoView view = 수정한다("PRD 초안", null, "2026-11-01", false);
+
+            assertThat(view.todo().dueDate()).isEqualTo(LocalDate.of(2026, 11, 1));
+            assertThat(view.overdue()).isTrue();
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"", "   "})
+        @DisplayName("AC-02-5 기존 할 일이 있을 때 제목을 비우거나 공백만 넣어 수정하면 수정은 거부되고 \"제목을 입력해 주세요.\"라는 안내가 돌아오며 기존 내용은 그대로다")
+        void 제목을_비우면_제목_없음_오류이고_교체하지_않는다(String title) {
+            기존_할_일이_있다(existing);
+
+            assertThatThrownBy(() -> service.update(1L, new UpdateTodoCommand(title, null, null, false)))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TITLE_REQUIRED));
+
+            verify(repository, never()).update(anyLong(), any());
+        }
+
+        static Stream<Arguments> 규칙에_어긋나는_수정() {
+            return Stream.of(
+                    Arguments.of("가".repeat(1001), null, TodoErrorCode.DESCRIPTION_TOO_LONG),
+                    Arguments.of(null, "abc", TodoErrorCode.INVALID_DUE_DATE),
+                    Arguments.of(null, "2026-02-30", TodoErrorCode.INVALID_DUE_DATE));
+        }
+
+        @ParameterizedTest
+        @MethodSource("규칙에_어긋나는_수정")
+        @DisplayName("AC-08-3 수정 내용이 규칙에 어긋날 때 저장하면 거부되고 기존 내용은 하나도 바뀌지 않는다")
+        void 규칙에_어긋나면_교체하지_않는다(String description, String dueDateText, TodoErrorCode expected) {
+            기존_할_일이_있다(existing);
+
+            assertThatThrownBy(() -> service.update(1L, new UpdateTodoCommand("PRD 초안", description, dueDateText, false)))
+                    .isInstanceOfSatisfying(TodoException.class, e -> assertThat(e.code()).isEqualTo(expected));
+
+            verify(repository, never()).update(anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("AC-12-2 한 번도 만들어진 적 없는 할 일을 가리킬 때 수정을 시도하면 같은 안내가 돌아오고, 다른 할 일은 바뀌지 않는다")
+        void 없는_할_일을_수정하면_할_일_없음_오류이고_교체하지_않는다() {
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.update(99L, new UpdateTodoCommand("제목", null, null, false)))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
+
+            verify(repository, never()).update(anyLong(), any());
+        }
+
+        @Test
+        @DisplayName("없는 할 일에 값 검증 오류가 있는 수정을 보내면 값 검증 오류가 아니라 \"할 일 없음\"이 먼저다 (TD-19)")
+        void 없는_할_일이면_값_검증보다_할_일_없음이_먼저다() {
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.update(99L, new UpdateTodoCommand("", null, null, false)))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
+        }
+
+        @Test
+        @DisplayName("조회와 교체 사이에 삭제되어도 \"할 일 없음\"으로 처리한다 (DATA_MODEL 6)")
+        void 교체가_빈_값이면_할_일_없음_오류() {
+            기존_할_일이_있다(existing);
+            when(repository.update(eq(1L), any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.update(1L, new UpdateTodoCommand("제목", null, null, false)))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
         }
     }
 }
