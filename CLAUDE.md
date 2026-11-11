@@ -88,7 +88,23 @@
 
 ## 4. 기술 스택 / 명령어
 
-> 2단계(기술 계획)에서 작성한다.
+> 근거: `docs/plan/TRD.md` (확정 2026-11-11). 상세 결정은 `docs/plan/DECISION_LOG.md`.
+
+### 스택
+- Java 21, Spring Boot 4.1.2 (`spring-boot-starter-web`), Gradle 9.8.2 (Kotlin DSL, wrapper)
+- 테스트: JUnit 5 + Mockito (`spring-boot-starter-test`), 커버리지: JaCoCo (라인 80% 이상)
+- 저장소: 인메모리 (영속성 없음)
+- 새 의존성은 사람의 승인 후에만 추가한다 (2.5.1).
+
+### 레이어 (`com.marvin.todo`)
+- `presentation` → `application` → `domain` ← `persistence`, 조립은 `config`. 참조 규칙은 TRD 2장.
+
+### 명령어
+> Gradle 프로젝트는 3단계의 첫 작업에서 만든다. 만들어진 뒤부터 아래 명령을 쓴다.
+- 빌드: `./gradlew build`
+- 테스트: `./gradlew test`
+- 커버리지 검증: `./gradlew jacocoTestCoverageVerification`
+- 로컬 실행(샘플 데이터 포함): `./gradlew bootRun --args='--spring.profiles.active=local'`
 
 ## 변경 이력
 
