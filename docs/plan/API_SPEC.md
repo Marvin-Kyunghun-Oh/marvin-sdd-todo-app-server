@@ -1,0 +1,343 @@
+# API_SPEC — Marvin's Todo App 서버
+
+> SDD 2단계(Plan) 산출물. 상태: **초안 (2026-11-11)**
+> 화면 개발자가 이 문서만 보고 서버를 호출할 수 있도록 쓴 호출 계약이다. TRD 5장(API 설계)과 6장의 오류 코드 표를 옮겨 온 문서다 (TD-28, TD-46).
+> 근거 표기: `FR-xx`/`AC-xx-x`는 `docs/spec/REQUIREMENTS.md`, `D-xx`는 `docs/spec/DECISION_LOG.md`, `TD-xx`는 `docs/plan/DECISION_LOG.md`.
+> 필드의 타입, 불변식, 정규화 규칙은 [`DATA_MODEL.md`](DATA_MODEL.md)가 기준이고 여기서 반복하지 않는다. 처리 순서와 요청 읽기 정책의 구현 방식은 [`TRD.md`](TRD.md) 3장이 기준이다.
+> 이 서버는 로그인, 알림, 우선순위·태그, 검색, 정렬 변경, 페이지 나눔, 버전 접두사, CORS를 제공하지 않는다 (PRD 5.2). 아래 예시는 모두 **오늘이 2026-11-10**이라고 가정한다 (AC-10-1~6과 같음). 예시의 `id`는 설명용 값이다.
+
+## 1. 공통 규칙
+
+### 1.1 요약 표
+| 요구 | 메서드와 경로 | 성공 | 절 |
+| --- | --- | --- | --- |
+| 추가 | `POST /todos` | 201 + Todo | 2.1 |
+| 목록 + 요약 | `GET /todos` | 200 + `{items, summary}` | 2.2 |
+| 한 건 보기 | `GET /todos/{id}` | 200 + Todo | 2.3 |
+| 수정 | `PUT /todos/{id}` | 200 + Todo | 2.4 |
+| 완료 표시 / 되돌리기 | `PATCH /todos/{id}` | 200 + Todo | 2.5 |
+| 삭제 | `DELETE /todos/{id}` | 204 (본문 없음) | 2.6 |
+
+표에 없는 경로는 404 `ENDPOINT_NOT_FOUND`이고(끝에 `/`가 붙은 `/todos/`도 포함), 표에 있는 경로의 다른 메서드는 405 `METHOD_NOT_ALLOWED`다 (AC-14-5, AC-14-6, TD-48). `HEAD`, `OPTIONS`는 계약에 넣지 않는다.
+
+### 1.2 요청 헤더 (D-31, D-37, D-39, TD-43)
+| 헤더 | 규칙 |
+| --- | --- |
+| `Content-Type` | `POST`, `PUT`, `PATCH`는 `application/json`이어야 한다. `application/json; charset=UTF-8`도 된다. 없거나 다른 형식이면 400 `MALFORMED_REQUEST`다. 본문이 비어 있어도 같다. `GET`, `DELETE`는 필요 없고, 본문이 와도 무시한다 |
+| `Accept` | 없거나 JSON을 받을 수 있는 값(`*/*`, `application/json` 등)이면 된다. JSON을 받을 수 없는 값(예: `text/html`만)이면 **모든 엔드포인트에서** 400 `MALFORMED_REQUEST`다 |
+- 문자 인코딩은 UTF-8이다.
+
+### 1.3 응답 (TD-47)
+- 본문이 있는 응답과 모든 오류 응답은 `Content-Type: application/json`(UTF-8)이다. 오류 응답은 `Accept`와 관계없이 항상 JSON이다.
+- `204`는 본문이 없다. `Location`, `Allow` 같은 부가 헤더는 계약에 포함하지 않는다.
+- 필드 이름은 camelCase다. 날짜는 `YYYY-MM-DD` 문자열이다.
+
+### 1.4 Todo 객체
+엔드포인트가 돌려주는 할 일 한 건의 모양이다 (AC-03-3, AC-07-1). 각 필드의 타입과 규칙은 [DATA_MODEL 5.3](DATA_MODEL.md)을 따른다.
+```json
+{
+  "id": 2,
+  "title": "PRD 초안 작성하기",
+  "description": "목적과 범위 정리",
+  "dueDate": "2026-11-12",
+  "completed": false,
+  "overdue": false
+}
+```
+- 설명이나 마감일이 없으면 필드를 빼지 않고 `null`이다 (AC-09-3).
+- `overdue`는 서버가 계산한다. 진행 중이고, 마감일이 있고, 마감일이 오늘(한국 시간)보다 이전일 때만 `true`다 (FR-10, [DATA_MODEL 3.2](DATA_MODEL.md)).
+
+### 1.5 마감일과 빈 값
+- 마감일은 `YYYY-MM-DD` 문자열이다. 마감일을 지우려면 `null`을 보내거나 필드를 생략하거나 빈 문자열(공백뿐인 값 포함)을 보낸다 (AC-09-2, AC-09-6, D-38).
+- 날짜로 읽을 수 없는 값은 400 `INVALID_DUE_DATE`다. 숫자나 `true` 같은 문자열이 아닌 값도 포함한다 (AC-09-4, D-36). 자세한 규칙은 [DATA_MODEL 2.3](DATA_MODEL.md).
+- 오늘보다 이전 날짜도 마감일로 저장된다 (AC-09-5, D-25).
+
+### 1.6 경로의 id (D-33, TD-45)
+- `{id}`는 앞에 0이 없는 10진 양의 정수여야 한다(`1`, `42`). 범위는 `long` 안이다.
+- `abc`, `0`, `-1`, `01`, `+1`, `1.5`, 범위를 넘는 수는 **번호로 읽을 수 없는 값**이며 존재하지 않는 할 일과 같이 404 `TODO_NOT_FOUND`다 (AC-12-3).
+- 삭제된 id는 다시 쓰지 않는다. 삭제한 id로는 항상 404다 (AC-11-2, AC-12-1).
+
+### 1.7 오류 응답 형식 (FR-14, AC-14-1)
+모든 실패는 같은 구성이다. 화면은 `code`로 분기하고 `message`를 그대로 보여 줄 수 있다.
+```json
+{ "error": { "code": "TITLE_REQUIRED", "message": "제목을 입력해 주세요." } }
+```
+- 오류가 여럿이어도 **첫 오류 하나**만 돌려준다.
+- 실패한 요청은 저장된 내용을 바꾸지 않는다 (AC-08-3, AC-12-2, AC-14-2).
+- 실패가 아닌 상황(할 일이 없음, 보기 결과가 없음)은 오류가 아니다. 빈 목록이 200으로 돌아오고 보여 줄 문구는 화면이 맡는다 (D-24, AC-04-4, AC-13-1).
+
+### 1.8 오류 코드 전체 (TD-46)
+`message`는 확정 문구이며 테스트가 정확한 문장을 검사한다 (D-24).
+
+| code | 상태 | message | 언제 | 근거 |
+| --- | --- | --- | --- | --- |
+| `TITLE_REQUIRED` | 400 | 제목을 입력해 주세요. | 제목이 없거나 `null`, 빈 값, 공백뿐 | AC-02-1, AC-02-2, AC-02-5 |
+| `TITLE_TOO_LONG` | 400 | 제목은 100자 이하로 입력해 주세요. | 제목이 101자 이상 | AC-02-3 |
+| `DESCRIPTION_TOO_LONG` | 400 | 설명은 1,000자 이하로 입력해 주세요. | 설명이 1,001자 이상 | AC-02-6 |
+| `INVALID_DUE_DATE` | 400 | 마감일을 올바른 날짜로 입력해 주세요. | 마감일이 날짜가 아님 | AC-09-4, D-36 |
+| `INVALID_STATUS_FILTER` | 400 | 보기 구분이 올바르지 않아요. 전체, 진행 중, 완료 중에서 골라 주세요. | `status`가 허용 값이 아님 | AC-04-5, D-30 |
+| `MALFORMED_REQUEST` | 400 | 요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요. | 깨진 JSON, 값의 종류 불일치, 알 수 없는 필드, 필수 `completed` 누락, 지원하지 않는 `Content-Type`/`Accept` | AC-14-3, AC-06-5, AC-08-7, D-31, D-32, D-37, D-39 |
+| `TODO_NOT_FOUND` | 404 | 할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요. | 없거나 삭제된 할 일, 번호로 읽을 수 없는 id | AC-11-2, AC-12-1~3, D-33 |
+| `ENDPOINT_NOT_FOUND` | 404 | 요청한 주소를 찾을 수 없어요. | 제공하지 않는 경로 | AC-14-5, D-35 |
+| `METHOD_NOT_ALLOWED` | 405 | 지원하지 않는 요청 방식이에요. | 경로는 있으나 허용되지 않는 메서드 | AC-14-6, D-35 |
+| `INTERNAL_ERROR` | 500 | 서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요. | 서버 내부의 예상하지 못한 오류. 내부 정보는 응답에 담지 않는다 | AC-14-4, D-34 |
+
+### 1.9 처리 순서 (TRD 3.3, TD-19, TD-22)
+수정(`PUT`)처럼 여러 오류가 가능한 요청은 아래 순서로 검사하고, 처음 걸리는 오류 하나만 돌려준다.
+1. 경로의 id가 번호로 읽히지 않으면 404 `TODO_NOT_FOUND`.
+2. 요청을 읽을 수 없으면 400 `MALFORMED_REQUEST`.
+3. id의 할 일이 없으면 404 `TODO_NOT_FOUND`.
+4. 값 검증 오류: 제목 → 설명 → 마감일 순.
+
+- 읽기 실패(2번)는 항상 없는 id(3번)보다 먼저다. 값 검증 오류(4번)보다는 없는 id(3번)가 먼저다.
+- id 형식 오류(1번)와 본문 읽기 실패(2번)가 한 요청에 겹칠 때 어느 쪽이 나올지는 정하지 않는다 (TD-22).
+
+## 2. 엔드포인트
+아래 각 표의 `INTERNAL_ERROR`(500)와 1.1의 `ENDPOINT_NOT_FOUND`/`METHOD_NOT_ALLOWED`는 모든 엔드포인트에서 날 수 있다. 각 표에는 `Accept` 불일치로 나는 `MALFORMED_REQUEST`도 포함한다 (1.2).
+
+### 2.1 할 일 추가 — `POST /todos`
+제목만으로 추가한다. 설명과 마감일은 추가 후 수정(2.4)에서 넣는다 (FR-01, D-06).
+
+**요청 헤더:** `Content-Type: application/json` (필수), `Accept: application/json` (선택)
+
+**요청 본문:**
+```json
+{ "title": "장보기" }
+```
+- 본문에는 `title`만 보낸다. 다른 필드(`description`, `dueDate`, `completed` 등)는 알 수 없는 필드로 거부된다 (AC-14-3).
+- 제목 앞뒤 공백은 제거되어 저장된다. `"  장보기  "`를 보내면 `"장보기"`가 저장된다 (AC-01-3).
+- 같은 제목으로 다시 추가해도 별도 항목이 만들어진다 (AC-01-2, D-05).
+
+**성공: 201 Created**
+```json
+{
+  "id": 1,
+  "title": "장보기",
+  "description": null,
+  "dueDate": null,
+  "completed": false,
+  "overdue": false
+}
+```
+
+**오류**
+| 상태 | code | 언제 | 근거 AC |
+| --- | --- | --- | --- |
+| 400 | `MALFORMED_REQUEST` | 본문이 없거나 깨진 JSON, `title`이 문자열이 아님, 알 수 없는 필드, `Content-Type` 누락/미지원, `Accept` 불일치 | AC-14-3 |
+| 400 | `TITLE_REQUIRED` | `title`이 없음, `null`, `""`, 공백뿐 | AC-02-1, AC-02-2 |
+| 400 | `TITLE_TOO_LONG` | 공백 제거 후 101자 이상 (100자는 통과) | AC-02-3, AC-02-4 |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | AC-14-4 |
+
+- 거부된 요청은 아무것도 만들지 않는다. 이후 목록과 요약은 그대로다 (AC-14-2).
+
+**해당 AC:** AC-01-1, AC-01-2, AC-01-3, AC-02-1, AC-02-2, AC-02-3, AC-02-4, AC-14-2, AC-14-3
+
+### 2.2 목록과 요약 보기 — `GET /todos`
+등록한 순서(먼저 등록한 것이 위)로 돌려준다. 마감일이나 완료 여부와 관계없이 순서는 바뀌지 않는다 (FR-03, D-11).
+
+**쿼리 파라미터 (TD-44)**
+| 이름 | 허용 값 | 생략 시 | 비고 |
+| --- | --- | --- | --- |
+| `status` | `all`, `active`, `done` (소문자만) | `all` | 전체 / 진행 중 / 완료 (FR-04) |
+
+- `status=ALL`, `status=foo`, 빈 값(`status=`), 반복(`status=active&status=done`)은 400 `INVALID_STATUS_FILTER`다.
+- 이 표에 없는 쿼리 파라미터는 무시한다.
+
+**요청 헤더:** 없음 (`Accept`는 선택)
+
+**성공: 200 OK** — `GET /todos` (전체)
+```json
+{
+  "items": [
+    { "id": 1, "title": "가", "description": null, "dueDate": "2026-11-06", "completed": false, "overdue": true },
+    { "id": 2, "title": "나", "description": "목적과 범위 정리", "dueDate": "2026-11-12", "completed": false, "overdue": false },
+    { "id": 3, "title": "다", "description": null, "dueDate": null, "completed": false, "overdue": false },
+    { "id": 4, "title": "장보기", "description": null, "dueDate": "2026-11-09", "completed": true, "overdue": false }
+  ],
+  "summary": { "total": 4, "active": 3, "done": 1, "remaining": 3 }
+}
+```
+- `items`의 각 항목은 1.4의 Todo 객체다. 1번 "가"는 진행 중이고 마감일(11-06)이 오늘보다 이전이라 `overdue: true`다 (AC-10-1). 4번 "장보기"는 마감일이 지났지만 완료되어 `overdue: false`다 (AC-10-4). 마감일이 오늘(11-10)인 진행 중 항목은 `overdue: false`다 (AC-10-2).
+- `GET /todos?status=done`은 `items`에 "장보기"만 담긴다. **`summary`는 위와 똑같다.** 요약은 보기 선택과 관계없이 항상 전체 기준이다 (AC-05-2, D-12).
+- `remaining`은 "N개 남음"에 쓰는 값이며 `active`와 같다. `total`은 항상 `active + done`이다.
+
+**성공: 200 OK** — 할 일이 없을 때, 또는 보기 결과가 없을 때 (오류가 아니다, AC-04-4, AC-13-1)
+```json
+{ "items": [], "summary": { "total": 0, "active": 0, "done": 0, "remaining": 0 } }
+```
+
+**오류**
+| 상태 | code | 언제 | 근거 AC |
+| --- | --- | --- | --- |
+| 400 | `INVALID_STATUS_FILTER` | `status`가 허용 값이 아님 (대문자, 빈 값, 반복 포함) | AC-04-5 |
+| 400 | `MALFORMED_REQUEST` | `Accept` 불일치 | AC-14-3 |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | AC-14-4 |
+
+**해당 AC:** AC-03-1, AC-03-2, AC-03-3, AC-04-1, AC-04-2, AC-04-3, AC-04-4, AC-04-5, AC-05-1, AC-05-2, AC-05-3, AC-06-1, AC-06-2, AC-09-3, AC-10-1, AC-10-2, AC-10-3, AC-10-4, AC-10-6, AC-11-1, AC-13-1
+
+### 2.3 할 일 한 건 보기 — `GET /todos/{id}`
+**경로 파라미터:** `id` — 1.6의 번호 형식
+
+**요청 헤더:** 없음 (`Accept`는 선택)
+
+**성공: 200 OK** — `GET /todos/2`
+```json
+{
+  "id": 2,
+  "title": "PRD 초안 작성하기",
+  "description": "목적과 범위 정리",
+  "dueDate": "2026-11-12",
+  "completed": false,
+  "overdue": false
+}
+```
+
+**오류**
+| 상태 | code | 언제 | 근거 AC |
+| --- | --- | --- | --- |
+| 404 | `TODO_NOT_FOUND` | 한 번도 만들어진 적 없는 id, 삭제된 id, 번호로 읽을 수 없는 id | AC-11-2, AC-12-1, AC-12-3 |
+| 400 | `MALFORMED_REQUEST` | `Accept` 불일치 | AC-14-3 |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | AC-14-4 |
+
+**해당 AC:** AC-07-1, AC-09-3, AC-10-1, AC-10-2, AC-10-3, AC-10-4, AC-10-6, AC-11-2, AC-12-1, AC-12-3
+
+### 2.4 할 일 수정 — `PUT /todos/{id}`
+제목, 설명, 마감일, 완료 여부를 **한 번에 교체**한다. 보내지 않은 값을 "그대로 둔다"로 보지 않는다 (FR-08, TD-18, [DATA_MODEL 4.2](DATA_MODEL.md)).
+
+**경로 파라미터:** `id` — 1.6의 번호 형식
+
+**요청 헤더:** `Content-Type: application/json` (필수), `Accept: application/json` (선택)
+
+**요청 본문:** 제목 "PRD 초안"에 설명과 마감일을 넣는 수정 (AC-08-1)
+```json
+{
+  "title": "PRD 초안 작성하기",
+  "description": "목적과 범위 정리",
+  "dueDate": "2026-11-12",
+  "completed": false
+}
+```
+| 필드 | 필수 | 비고 |
+| --- | --- | --- |
+| `title` | 예 | 없거나 비면 `TITLE_REQUIRED` |
+| `description` | 아니오 | 없음, `null`, 공백뿐이면 설명 없음 (AC-08-5, AC-08-6) |
+| `dueDate` | 아니오 | 없음, `null`, `""`, 공백뿐이면 마감일 없음 (AC-09-2, AC-09-6) |
+| `completed` | 예 | 불리언. 없거나 `null`이면 `MALFORMED_REQUEST` (AC-08-7) |
+
+- 완료로 표시하며 저장하려면 `"completed": true`를 보낸다 (AC-08-2).
+- 설명과 마감일을 지우려면 `"description": null, "dueDate": null`을 보낸다.
+- 다른 필드는 알 수 없는 필드로 거부된다 (AC-14-3).
+
+**성공: 200 OK** — 수정된 Todo 객체
+```json
+{
+  "id": 2,
+  "title": "PRD 초안 작성하기",
+  "description": "목적과 범위 정리",
+  "dueDate": "2026-11-12",
+  "completed": false,
+  "overdue": false
+}
+```
+
+**오류** (1.9의 순서대로 검사)
+| 상태 | code | 언제 | 근거 AC |
+| --- | --- | --- | --- |
+| 404 | `TODO_NOT_FOUND` | 없거나 삭제된 id, 번호로 읽을 수 없는 id | AC-12-2, AC-12-3 |
+| 400 | `MALFORMED_REQUEST` | 깨진 JSON, 타입 불일치(`title: 123`, `completed: "true"` 등), 알 수 없는 필드, `completed` 누락, `Content-Type` 누락/미지원, `Accept` 불일치 | AC-08-7, AC-14-3 |
+| 400 | `TITLE_REQUIRED` | `title`이 없음, `null`, `""`, 공백뿐 | AC-02-5 |
+| 400 | `TITLE_TOO_LONG` | 공백 제거 후 101자 이상 | AC-02-3 |
+| 400 | `DESCRIPTION_TOO_LONG` | 공백 제거 후 1,001자 이상 | AC-02-6 |
+| 400 | `INVALID_DUE_DATE` | 마감일이 날짜가 아님 (`"abc"`, `"2026-02-30"`, `123` 등) | AC-09-4 |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | AC-14-4 |
+
+- 거부된 수정은 기존 내용을 하나도 바꾸지 않는다 (AC-08-3).
+
+**해당 AC:** AC-02-3, AC-02-5, AC-02-6, AC-08-1, AC-08-2, AC-08-3, AC-08-5, AC-08-6, AC-08-7, AC-09-1, AC-09-2, AC-09-4, AC-09-5, AC-09-6, AC-10-5, AC-12-2, AC-12-3, AC-14-3
+
+### 2.5 완료 표시와 되돌리기 — `PATCH /todos/{id}`
+완료 여부만 바꾼다. 다른 필드는 그대로다 (FR-06, D-14, TD-06). 이 엔드포인트는 완료 여부 말고는 아무것도 받지 않는다.
+
+**경로 파라미터:** `id` — 1.6의 번호 형식
+
+**요청 헤더:** `Content-Type: application/json` (필수), `Accept: application/json` (선택)
+
+**요청 본문**
+```json
+{ "completed": true }
+```
+- 완료로 표시하려면 `true`, 진행 중으로 되돌리려면 `false`다.
+- 이미 그 상태여도 오류 없이 200이다. 상태는 유지된다 (AC-06-3, AC-06-4, D-29).
+
+**성공: 200 OK** — 바뀐 Todo 객체. 기한 지난 항목을 완료로 표시하면 `overdue`가 `false`로 풀린다 (AC-10-5).
+```json
+{
+  "id": 1,
+  "title": "가",
+  "description": null,
+  "dueDate": "2026-11-06",
+  "completed": true,
+  "overdue": false
+}
+```
+
+**오류**
+| 상태 | code | 언제 | 근거 AC |
+| --- | --- | --- | --- |
+| 404 | `TODO_NOT_FOUND` | 없거나 삭제된 id, 번호로 읽을 수 없는 id | AC-12-2, AC-12-3 |
+| 400 | `MALFORMED_REQUEST` | `completed` 누락/`null`/불리언 아님, 깨진 JSON, 알 수 없는 필드, `Content-Type` 누락/미지원, `Accept` 불일치 | AC-06-5, AC-14-3 |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | AC-14-4 |
+
+**해당 AC:** AC-06-1, AC-06-2, AC-06-3, AC-06-4, AC-06-5, AC-10-5, AC-12-2, AC-12-3, AC-14-3
+
+### 2.6 할 일 삭제 — `DELETE /todos/{id}`
+삭제는 되돌릴 수 없다 (FR-11, D-15). "정말 삭제할까요?" 확인은 화면이 맡고, 서버는 요청을 받으면 바로 지운다 (D-21).
+
+**경로 파라미터:** `id` — 1.6의 번호 형식
+
+**요청 헤더:** 없음 (`Accept`는 선택)
+
+**성공: 204 No Content** — 본문 없음. 이후 목록과 요약에서 사라진다 (AC-11-1).
+
+**오류**
+| 상태 | code | 언제 | 근거 AC |
+| --- | --- | --- | --- |
+| 404 | `TODO_NOT_FOUND` | 없거나 이미 삭제된 id (같은 id를 다시 삭제해도), 번호로 읽을 수 없는 id | AC-11-2, AC-12-2, AC-12-3 |
+| 400 | `MALFORMED_REQUEST` | `Accept` 불일치 | AC-14-3 |
+| 500 | `INTERNAL_ERROR` | 서버 내부 오류 | AC-14-4 |
+
+**해당 AC:** AC-11-1, AC-11-2, AC-12-2, AC-12-3
+
+## 3. AC → 엔드포인트 추적표 (TD-49)
+모든 AC가 최소 한 엔드포인트(또는 공통 규칙)에 연결된다. "공통"은 특정 엔드포인트가 아니라 1장의 규칙이 보장하는 항목이다.
+
+| AC | 엔드포인트 | AC | 엔드포인트 |
+| --- | --- | --- | --- |
+| AC-01-1 | 2.1 | AC-08-1 | 2.4 |
+| AC-01-2 | 2.1 | AC-08-2 | 2.4 |
+| AC-01-3 | 2.1 | AC-08-3 | 2.4 |
+| AC-02-1 | 2.1 | AC-08-5 | 2.4 |
+| AC-02-2 | 2.1 | AC-08-6 | 2.4 |
+| AC-02-3 | 2.1, 2.4 | AC-08-7 | 2.4 |
+| AC-02-4 | 2.1 | AC-09-1 | 2.4 |
+| AC-02-5 | 2.4 | AC-09-2 | 2.4 |
+| AC-02-6 | 2.4 | AC-09-3 | 2.2, 2.3 |
+| AC-03-1 | 2.2 | AC-09-4 | 2.4 |
+| AC-03-2 | 2.2 | AC-09-5 | 2.4 |
+| AC-03-3 | 2.2 | AC-09-6 | 2.4 |
+| AC-04-1 | 2.2 | AC-10-1 | 2.2, 2.3 |
+| AC-04-2 | 2.2 | AC-10-2 | 2.2, 2.3 |
+| AC-04-3 | 2.2 | AC-10-3 | 2.2, 2.3 |
+| AC-04-4 | 2.2 | AC-10-4 | 2.2, 2.3 |
+| AC-04-5 | 2.2 | AC-10-5 | 2.4, 2.5 |
+| AC-05-1 | 2.2 | AC-10-6 | 2.2, 2.3 |
+| AC-05-2 | 2.2 | AC-11-1 | 2.6, 2.2 |
+| AC-05-3 | 2.2 | AC-11-2 | 2.6, 2.3 |
+| AC-06-1 | 2.5, 2.2 | AC-12-1 | 2.3 |
+| AC-06-2 | 2.5, 2.2 | AC-12-2 | 2.4, 2.5, 2.6 |
+| AC-06-3 | 2.5 | AC-12-3 | 2.3, 2.4, 2.5, 2.6 |
+| AC-06-4 | 2.5 | AC-13-1 | 2.2 |
+| AC-06-5 | 2.5 | AC-14-1 | 공통 (1.7, 1.8) |
+| AC-07-1 | 2.3 | AC-14-2 | 공통 (1.7), 2.1 |
+| AC-14-3 | 2.1, 2.4, 2.5, 그리고 모든 엔드포인트의 `Accept` 검사 (1.2) | AC-14-4 | 공통 (1.8) |
+| AC-14-5 | 공통 (1.1) | AC-14-6 | 공통 (1.1) |

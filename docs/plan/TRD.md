@@ -3,7 +3,7 @@
 > SDD 2단계(Plan) 산출물. 상태: **확정 (2026-11-11, Marvin-Oh)**
 > 근거 표기: `FR-xx`/`AC-xx-x`는 `docs/spec/REQUIREMENTS.md`, `D-xx`는 `docs/spec/DECISION_LOG.md`, `TD-xx`는 `docs/plan/DECISION_LOG.md`, `CLAUDE.md x.x`는 헌법.
 > 충돌 시 명세가 우선한다 (CLAUDE.md 2.2.5). 명세에 없는 실패 상황은 이 문서에서 정하지 않고 명세 제안(D-32~D-35)으로 올려 승인받았다 (8장).
-> 4장(도메인 모델)은 `DATA_MODEL.md`로 옮겼다 (TD-28, TD-35). 5장(API)은 이후 `API_SPEC.md`로 옮기고 TRD에는 결정 요약만 남긴다. 옮기기 전의 5장은 이 문서가 기준이다.
+> 4장(도메인 모델)은 `DATA_MODEL.md`로, 5장(API)과 6장의 오류 코드 표는 `API_SPEC.md`로 옮겼다 (TD-28, TD-35, TD-46). 이 문서에는 결정 요약과 구현 정책(3장)만 남는다.
 
 ## 1. 기술 스택 (TD-01, TD-02, TD-12, TD-16, TD-17, TD-23, CLAUDE.md 4장)
 | 항목 | 선택 | 이유 (한 줄) |
@@ -62,7 +62,7 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
   - 문자열이면 그 문자열을 `application`에 넘기고, 파싱은 `domain`이 한다. 앞뒤 공백을 제거해 비면(`""` 포함) 마감일 없음이고, 아니면 ISO `YYYY-MM-DD`로 파싱하며 실패하면 `INVALID_DUE_DATE`다 (D-38, AC-09-6).
   - 문자열이 아닌 값(`123`, `true`, 객체, 배열)은 JSON 원문 텍스트(예: `"123"`)를 문자열로 넘긴다. ISO 날짜 모양이 될 수 없으므로 도메인 파싱에서 `INVALID_DUE_DATE`가 되고, 검증 순서(제목→설명→마감일)도 그대로 지켜진다.
   - 이렇게 하면 `domain`과 `application`은 Jackson 타입을 모른다 (CLAUDE.md 2.3.2). 문자열이 아닌 `dueDate`를 날짜 오류로 보는 해석은 AC-09-4와 AC-14-3이 겹치는 부분이라 D-36으로 명세에 남긴다 (D-36, TD-20).
-- Content-Type이 없거나 JSON이 아닌 요청(415)과 Accept가 JSON이 아닌 요청(406)은 D-31 범위에 포함되어 `MALFORMED_REQUEST`(400)로 응답한다. 새 문구는 만들지 않는다. 오류 처리기가 명시적으로 변환하지 않으면 catch-all 처리기에서 500이 되므로 변환 규칙을 둔다 (D-37, TD-30, TD-32).
+- `Content-Type`이 없거나 JSON이 아닌 요청(본문이 있는 추가·수정·완료 표시)과, JSON을 받을 수 없는 `Accept`(모든 요청)는 D-31 범위에 포함되어 `MALFORMED_REQUEST`(400)로 응답한다. 새 문구는 만들지 않는다. 오류 처리기가 명시적으로 변환하지 않으면 catch-all 처리기에서 500이 되므로 변환 규칙을 두고, 오류 응답은 `Accept`와 무관하게 항상 JSON으로 쓴다 (D-37, D-39, TD-30, TD-32, TD-43).
 - 강제 변환을 끄는 구체적 설정 방법은 Boot 4.1.2의 Jackson 버전에서 확인한다. 테스트(9장 웹 슬라이스)가 `title: 123`과 `completed: "true"` 거부를 먼저 실패시켜 설정을 확정한다 (CLAUDE.md 2.1.2).
 - `status` 값은 소문자 `all`, `active`, `done`만 허용한다. `ALL` 같은 대문자는 `INVALID_STATUS_FILTER`다 (AC-04-5, TD-27).
 
@@ -83,47 +83,19 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
 - 기한 지남(`overdue`)과 요약은 저장하지 않고 요청마다 `Clock` 기준 오늘로 계산한다 (FR-05, FR-10, DATA_MODEL 3).
 - id가 곧 등록 순서다 (D-11, FR-03).
 
-## 5. API 설계 (TD-04~TD-07)
-JSON, 필드는 camelCase, 상태 값은 영어 (TD-04).
+## 5. API 설계 (TD-04~TD-07, TD-28)
+호출 계약은 [`API_SPEC.md`](API_SPEC.md)가 기준이다. 요약만 남긴다.
+- REST + JSON, 필드는 camelCase, 날짜는 `YYYY-MM-DD` 문자열 (TD-04).
+- 엔드포인트 6개: `POST /todos`, `GET /todos`(목록 + 요약), `GET /todos/{id}`, `PUT /todos/{id}`(수정), `PATCH /todos/{id}`(완료 표시), `DELETE /todos/{id}` (FR-01~FR-13, TD-05, TD-06).
+- 수정은 네 값을 모두 교체하고(TD-18), 완료 표시는 `completed` 하나만 받는다 (FR-06, FR-08).
+- 요청 헤더 규칙(Content-Type은 본문 있는 요청, Accept는 모든 요청)은 TD-43, 쿼리·id 형식은 TD-44, TD-45에 있다.
 
-| 요구 | 메서드와 경로 | 요청 | 성공 응답 | 근거 |
-| --- | --- | --- | --- | --- |
-| 추가 | `POST /todos` | `{title}` | 201 + Todo | FR-01, D-06 |
-| 목록 + 요약 | `GET /todos?status=all\|active\|done` | - | 200 + `{items, summary}` | FR-03, FR-04, FR-05, FR-13, TD-05 |
-| 한 건 | `GET /todos/{id}` | - | 200 + Todo | FR-07 |
-| 수정 | `PUT /todos/{id}` | `{title, description, dueDate, completed}` | 200 + Todo | FR-08, FR-09, TD-06 |
-| 완료 표시/되돌리기 | `PATCH /todos/{id}` | `{completed}` | 200 + Todo | FR-06, D-14, D-29, TD-06 |
-| 삭제 | `DELETE /todos/{id}` | - | 204 | FR-11, D-15 |
-
-**Todo 응답:** `{id, title, description, dueDate, completed, overdue}` (AC-03-3, AC-07-1). 설명과 마감일이 없으면 `null`이다 (AC-09-3).
-
-**목록 응답:** `{items: [Todo...], summary: {total, active, done, remaining}}` (AC-05-1~3). `status`를 생략하면 `all`이다 (FR-04). `summary`는 `status`와 무관하게 항상 전체 기준이다 (AC-05-2, D-12). `remaining`은 `active`와 같은 값이다.
-
-**멱등성:** 이미 완료된 항목을 완료로 표시하거나 이미 진행 중인 항목을 되돌려도 200이다 (AC-06-3, AC-06-4).
-
-**수정(PUT) 규칙 (TD-18):** `title`과 `completed`는 필수다(`title` 누락은 `TITLE_REQUIRED`, `completed` 누락은 `MALFORMED_REQUEST`, D-32). `description`, `dueDate`는 생략하거나 `null`이면 없음으로 저장하므로 "필드 없음"과 "삭제"를 구분하지 않는다 (AC-09-2, AC-08-5). `PATCH`의 본문은 `completed` 하나뿐이다.
-
-**날짜:** ISO `YYYY-MM-DD` 문자열이다. 공백 제거 후 비어 있으면 마감일 없음이고(D-38), 그 밖에 파싱에 실패하는 값은 모두 `INVALID_DUE_DATE`다 (AC-09-4, TD-07, TD-20).
-
-## 6. 오류 응답 (FR-14, TD-08, TD-15)
-모든 실패는 같은 구성이다 (AC-14-1):
+## 6. 오류 응답 (FR-14, TD-08, TD-15, TD-46)
+오류 코드, HTTP 상태, 확정 문구의 전체 표는 [`API_SPEC.md` 1.8](API_SPEC.md)이 기준이다. 형식은 다음과 같다 (AC-14-1):
 ```json
 { "error": { "code": "TITLE_REQUIRED", "message": "제목을 입력해 주세요." } }
 ```
-| code | HTTP | message | 근거 |
-| --- | --- | --- | --- |
-| `TITLE_REQUIRED` | 400 | 제목을 입력해 주세요. | AC-02-1, AC-02-2, AC-02-5 |
-| `TITLE_TOO_LONG` | 400 | 제목은 100자 이하로 입력해 주세요. | AC-02-3 |
-| `DESCRIPTION_TOO_LONG` | 400 | 설명은 1,000자 이하로 입력해 주세요. | AC-02-6 |
-| `INVALID_DUE_DATE` | 400 | 마감일을 올바른 날짜로 입력해 주세요. | AC-09-4 |
-| `TODO_NOT_FOUND` | 404 | 할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요. | AC-11-2, FR-12, AC-12-3 |
-| `INVALID_STATUS_FILTER` | 400 | 보기 구분이 올바르지 않아요. 전체, 진행 중, 완료 중에서 골라 주세요. | AC-04-5, D-30 |
-| `MALFORMED_REQUEST` | 400 | 요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요. | AC-14-3, D-31, AC-06-5, AC-08-7, D-37 |
-| `INTERNAL_ERROR` | 500 | 서버에 문제가 생겼어요. 잠시 후 다시 시도해 주세요. | AC-14-4, D-34 |
-| `ENDPOINT_NOT_FOUND` | 404 | 요청한 주소를 찾을 수 없어요. | AC-14-5, D-35 |
-| `METHOD_NOT_ALLOWED` | 405 | 지원하지 않는 요청 방식이에요. | AC-14-6, D-35 |
-
-- 이 표의 모든 행은 명세(AC-14-4~6 포함)에 근거가 있다. 새 실패 상황이 생기면 코드와 문구를 정하기 전에 명세로 올린다 (CLAUDE.md 2.2.4).
+- 이 표의 모든 코드는 명세(AC-14-3~6 포함)에 근거가 있다. 새 실패 상황이 생기면 코드와 문구를 정하기 전에 명세로 올린다 (CLAUDE.md 2.2.4).
 - 실패한 요청은 저장 상태를 바꾸지 않는다 (AC-08-3, AC-12-2, AC-14-2). 검증은 저장 호출 전에 끝낸다.
 - 오류를 삼키지 않는다 (CLAUDE.md 2.4.3). 처리되지 않은 예외는 `INTERNAL_ERROR`로 바꾸고 예외 메시지나 스택은 응답에 담지 않으며 서버 로그에 남긴다.
 - **멈추는 규칙 (TD-32, D-37):** 명세에 없는 프레임워크 수준 오류(415, 406 등)는 위 코드 중 하나로 보내고, 새 문구는 만들지 않는다. 이 규칙으로 처리할 수 없는 새 실패 상황만 명세 변경(역류 규칙)으로 올린다.

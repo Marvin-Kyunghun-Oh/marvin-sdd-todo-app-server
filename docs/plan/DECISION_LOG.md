@@ -47,6 +47,13 @@
 | TD-40 | 생성 흐름과 불변식 보장 (DATA_MODEL 검토 반영) | 원시 입력은 `application`의 명령 객체(문자열). 도메인 팩토리(`NewTodo.of`, `TodoUpdate.of`)가 정규화·검증하고 입력 오류는 오류 코드를 가진 도메인 예외로 던짐. `Todo`·`NewTodo`·`TodoUpdate`의 compact 생성자가 불변식(id ≥ 1, 길이 등)을 다시 확인하고 어기면 `IllegalArgumentException`(→ `INTERNAL_ERROR`). 저장소는 검증된 `NewTodo`에 id만 붙임 | `record` 생성자는 public이라 팩토리 우회가 가능. 이전 문서의 "팩토리에서만 생성"과 "id는 저장소가 발급"이 모순이었음 | DATA_MODEL 2, 4, 6 |
 | TD-41 | `overdue` 계산 주체 (DATA_MODEL 검토 반영) | 판정식은 `Todo.isOverdue(today)`(domain). `application`이 `Clock`으로 오늘을 한 번 계산해 `TodoView(todo, overdue)`와 `ListResult(items, summary)`를 돌려주고 `presentation` 매퍼는 옮겨 담기만 함 | `presentation`이 `Clock`에 의존하지 않게 함(TD-26) | DATA_MODEL 3.2, 5.3, TRD 2 |
 | TD-42 | 수정 흐름 순서 (DATA_MODEL 검토 반영) | `findById` → 도메인 검증 → `update(id, old -> old.apply(검증된 값))`. 완료 표시는 검증 없이 `update`만 | 없는 id의 404가 값 검증보다 먼저(TD-19)이고 검증 실패 시 저장소를 건드리지 않음(AC-08-3) | DATA_MODEL 6 |
+| TD-43 | 요청 헤더 규칙 (API_SPEC 작성, D-39) | `Content-Type: application/json`(charset 허용)은 POST/PUT/PATCH에만 요구, 없거나 다르면 `MALFORMED_REQUEST`. 본문이 비어도 같음. GET/DELETE의 본문은 무시. `Accept`는 없거나 JSON을 받을 수 있으면 통과, 아니면 **모든 엔드포인트**에서 `MALFORMED_REQUEST`. 오류 응답은 `Accept`와 무관하게 항상 JSON | D-37이 Accept 불일치를 D-31에 포함했으나 AC-14-3의 When이 본문 있는 요청만 나열 → 문구를 정정(D-39) | API_SPEC 1.2, TRD 3.2 |
+| TD-44 | `status` 쿼리 규칙 (API_SPEC 작성) | 빈 값(`status=`)과 반복(`status=active&status=done`)은 `INVALID_STATUS_FILTER`. 생략만 `all`. 표에 없는 쿼리 파라미터는 무시 | AC-04-5 "허용 외 값은 거부"와 일관. 쿼리 거부는 명세에도 필요도 없어 YAGNI | API_SPEC 2.2 |
+| TD-45 | 경로 id의 정규 형식 | 앞에 0이 없는 10진 양의 정수(`[1-9][0-9]*`)이고 long 범위 안일 때만 번호. `01`, `+1`, `1.5`, 범위 초과는 번호로 읽을 수 없는 값으로 404 `TODO_NOT_FOUND` | D-33의 "번호로 읽을 수 없는 값"의 범위 확정. 한 항목을 가리키는 주소를 하나로 유지 | API_SPEC 1.6 |
+| TD-46 | 문서 분담 (API_SPEC 작성) | 오류 코드 표는 API_SPEC 1.8이 기준, TRD 6장은 형식·원칙·멈추는 규칙과 링크만. 처리 순서와 요청 읽기 정책의 구현은 TRD 3장이 기준, API_SPEC에는 결과만 요약 | 외부 계약은 API_SPEC, 구현 정책은 TRD. 기준 문서가 둘이 되는 것을 방지(TD-28) | API_SPEC 머리말, TRD 5, 6 |
+| TD-47 | 응답 헤더 | `Content-Type: application/json`(UTF-8)만 계약. `Location`(201 포함), `Allow` 등은 보내지 않음. 204는 본문 없음 | 명세에 없는 부가 기능을 넣지 않음(YAGNI) | API_SPEC 1.3 |
+| TD-48 | 경로·메서드 규칙 | 표에 없는 경로(끝 `/` 포함)는 404 `ENDPOINT_NOT_FOUND`, 있는 경로의 다른 메서드는 405 `METHOD_NOT_ALLOWED`. HEAD, OPTIONS는 계약 밖. 이미 삭제한 id의 재삭제는 404 `TODO_NOT_FOUND` | AC-14-5, AC-14-6, AC-11-2, AC-12-2 | API_SPEC 1.1, 2.6 |
+| TD-49 | 예시와 추적표 | 예시는 "오늘 = 2026-11-10" 기준이고 값은 AC 예시를 사용. 모든 AC를 엔드포인트에 연결하고 특정 엔드포인트가 없는 AC(AC-14-1, 14-2, 14-4~6)는 "공통"으로 표기. 전체 56개 AC가 표에 모두 있음을 확인함 | PRD 6장 성공 기준(모든 AC가 자동 테스트로 확인됨)의 출발점 | API_SPEC 3 |
 
 ## 명세로 올려 승인된 항목
 TRD가 정하지 않고 `docs/spec/`에 올려 승인받은 항목은 D-32(`completed` 누락), D-33(id가 번호가 아님), D-34(500), D-35(없는 경로/허용되지 않은 메서드)이다. TRD 6장의 표시는 지웠다.
