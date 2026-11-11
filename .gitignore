@@ -6,3 +6,7 @@
 
 # 비밀 값
 .env*
+
+# Gradle
+.gradle/
+build/
