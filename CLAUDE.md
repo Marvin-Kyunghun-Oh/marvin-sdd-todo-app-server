@@ -88,7 +88,7 @@
 
 ## 4. 기술 스택 / 명령어
 
-> 근거: `docs/plan/TRD.md` (확정 2026-11-11). 상세 결정은 `docs/plan/DECISION_LOG.md`.
+> 근거: 기술 계획 문서 `docs/plan/`의 `TRD.md`(결정과 구현 정책), `DATA_MODEL.md`(데이터 규칙), `API_SPEC.md`(호출 계약), `DECISION_LOG.md`(TD 결정 기록). 모두 확정 2026-11-11.
 
 ### 스택
 - Java 21, Spring Boot 4.1.2 (`spring-boot-starter-webmvc`), Gradle 9.8.2 (Kotlin DSL, wrapper)
@@ -112,3 +112,4 @@
 | --- | --- | --- |----------------|
 | 2026-11-10 | 초안 작성 | SDD 0단계 | 승인 (Marvin-Oh) |
 | 2026-11-11 | 4장(기술 스택/명령어) 작성. 2장 변경 아님 | SDD 2단계, TRD 확정 | 승인 (Marvin-Oh) |
+| 2026-11-11 | 4장 근거 문서에 DATA_MODEL, API_SPEC 추가. 2장 변경 아님 | SDD 2단계 확정 | 승인 (Marvin-Oh) |
