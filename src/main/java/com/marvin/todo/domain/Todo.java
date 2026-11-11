@@ -19,4 +19,8 @@ public record Todo(long id, String title, String description, LocalDate dueDate,
     public Todo apply(TodoUpdate update) {
         return new Todo(id, update.title(), update.description(), update.dueDate(), update.completed());
     }
+
+    public Todo withCompleted(boolean completed) {
+        return new Todo(id, title, description, dueDate, completed);
+    }
 }

@@ -37,7 +37,7 @@ public class TodoService {
 
     public TodoView get(long id) {
         Todo todo = repository.findById(id).orElseThrow(TodoService::notFound);
-        return new TodoView(todo, todo.isOverdue(LocalDate.now(clock)));
+        return view(todo);
     }
 
     public void delete(long id) {
@@ -51,10 +51,20 @@ public class TodoService {
         TodoUpdate update = TodoUpdate.of(command.title(), command.description(), command.dueDateText(), command.completed());
         Todo updated = repository.update(id, current -> current.apply(update))
                 .orElseThrow(TodoService::notFound);
-        return new TodoView(updated, updated.isOverdue(LocalDate.now(clock)));
+        return view(updated);
+    }
+
+    public TodoView markCompleted(long id, boolean completed) {
+        Todo updated = repository.update(id, current -> current.withCompleted(completed))
+                .orElseThrow(TodoService::notFound);
+        return view(updated);
     }
 
     private static TodoException notFound() {
         return new TodoException(TodoErrorCode.TODO_NOT_FOUND);
+    }
+
+    private TodoView view(Todo todo) {
+        return new TodoView(todo, todo.isOverdue(LocalDate.now(clock)));
     }
 }

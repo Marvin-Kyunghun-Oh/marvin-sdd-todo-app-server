@@ -547,4 +547,66 @@ class TodoServiceTest {
                             e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
         }
     }
+
+    @Nested
+    @DisplayName("완료 표시")
+    class MarkCompleted {
+
+        @SuppressWarnings("unchecked")
+        private TodoView 표시한다(Todo todo, boolean completed) {
+            when(repository.update(eq(todo.id()), any())).thenAnswer(invocation ->
+                    Optional.of(((UnaryOperator<Todo>) invocation.getArgument(1)).apply(todo)));
+            return service.markCompleted(todo.id(), completed);
+        }
+
+        @Test
+        @DisplayName("AC-06-1 진행 중인 할 일이 있을 때 완료로 표시하면 그 할 일은 완료가 되고 요약의 진행 중은 1 줄고 완료는 1 는다")
+        void 완료로_표시하면_완료다() {
+            assertThat(표시한다(new Todo(1L, "가", null, null, false), true).todo().completed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("AC-06-2 완료된 할 일이 있을 때 진행 중으로 되돌리면 그 할 일은 진행 중이 되고 요약이 그에 맞게 바뀐다")
+        void 되돌리면_진행_중이다() {
+            assertThat(표시한다(new Todo(1L, "가", null, null, true), false).todo().completed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("AC-06-3 이미 완료된 할 일에 다시 완료로 표시하면 오류 없이 완료 상태가 유지된다")
+        void 이미_완료인데_완료로_표시해도_완료가_유지된다() {
+            assertThat(표시한다(new Todo(1L, "가", null, null, true), true).todo().completed()).isTrue();
+        }
+
+        @Test
+        @DisplayName("AC-06-4 이미 진행 중인 할 일에 다시 진행 중으로 되돌리면 오류 없이 진행 중 상태가 유지된다")
+        void 이미_진행_중인데_되돌려도_진행_중이_유지된다() {
+            assertThat(표시한다(new Todo(1L, "가", null, null, false), false).todo().completed()).isFalse();
+        }
+
+        @Test
+        @DisplayName("완료 표시로 바뀌는 것은 완료 여부뿐이다 (DATA_MODEL 4.3)")
+        void 완료_여부_외의_값은_그대로다() {
+            Todo todo = new Todo(7L, "가", "설명", LocalDate.of(2026, 11, 12), false);
+
+            assertThat(표시한다(todo, true).todo()).isEqualTo(new Todo(7L, "가", "설명", LocalDate.of(2026, 11, 12), true));
+        }
+
+        @Test
+        @DisplayName("AC-10-5 기한 지남이던 할 일이 있을 때 완료로 표시하면 기한 지남이 해제된다")
+        void 완료로_표시하면_기한_지남이_해제된다() {
+            Todo overdue = new Todo(1L, "가", null, LocalDate.of(2026, 11, 6), false);
+
+            assertThat(표시한다(overdue, true).overdue()).isFalse();
+        }
+
+        @Test
+        @DisplayName("AC-12-2 한 번도 만들어진 적 없는 할 일을 가리킬 때 완료 표시를 시도하면 같은 안내가 돌아오고, 다른 할 일은 바뀌지 않는다")
+        void 없는_할_일에_완료_표시하면_할_일_없음_오류() {
+            when(repository.update(eq(99L), any())).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.markCompleted(99L, true))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
+        }
+    }
 }
