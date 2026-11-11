@@ -5,15 +5,18 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import com.marvin.todo.domain.NewTodo;
 import com.marvin.todo.domain.Todo;
+import com.marvin.todo.domain.TodoErrorCode;
 import com.marvin.todo.domain.TodoException;
 import com.marvin.todo.domain.TodoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -26,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -267,17 +271,22 @@ class TodoServiceTest {
         assertThat(seoulService.list(StatusFilter.ALL).items().get(0).overdue()).isTrue();
     }
 
-    @Test
-    @DisplayName("AC-03-3 목록을 보면 각 할 일에 대해 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 함께 돌아온다")
-    void 섞인_목록에서_항목마다_기한_지남_여부가_맞다() {
-        when(repository.findAll()).thenReturn(List.of(
-                new Todo(1L, "지남", null, LocalDate.of(2026, 11, 6), false),
-                new Todo(2L, "오늘", null, LocalDate.of(2026, 11, 10), false),
-                new Todo(3L, "완료", null, LocalDate.of(2026, 11, 9), true),
-                new Todo(4L, "없음", null, null, false)));
+    @Nested
+    @DisplayName("기한 지남 여부가 섞인 목록")
+    class MixedOverdueList {
 
-        assertThat(service.list(StatusFilter.ALL).items())
-                .extracting(TodoView::overdue).containsExactly(true, false, false, false);
+        @Test
+        @DisplayName("AC-03-3 목록을 보면 각 할 일에 대해 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 함께 돌아온다")
+        void 섞인_목록에서_항목마다_기한_지남_여부가_맞다() {
+            when(repository.findAll()).thenReturn(List.of(
+                    new Todo(1L, "지남", null, LocalDate.of(2026, 11, 6), false),
+                    new Todo(2L, "오늘", null, LocalDate.of(2026, 11, 10), false),
+                    new Todo(3L, "완료", null, LocalDate.of(2026, 11, 9), true),
+                    new Todo(4L, "없음", null, null, false)));
+
+            assertThat(service.list(StatusFilter.ALL).items())
+                    .extracting(TodoView::overdue).containsExactly(true, false, false, false);
+        }
     }
 
     @Test
@@ -310,5 +319,73 @@ class TodoServiceTest {
         countingService.list(StatusFilter.ALL);
 
         assertThat(instantCalls).hasValue(1);
+    }
+
+    @Nested
+    @DisplayName("한 건 보기")
+    class Get {
+
+        @Test
+        @DisplayName("AC-07-1 할 일이 있을 때 그 할 일을 열면 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 돌아온다")
+        void 있는_할_일을_열면_다섯_값이_돌아온다() {
+            Todo todo = new Todo(1L, "가", "설명", LocalDate.of(2026, 11, 6), false);
+            when(repository.findById(1L)).thenReturn(Optional.of(todo));
+
+            TodoView view = service.get(1L);
+
+            assertThat(view.todo()).isEqualTo(todo);
+            assertThat(view.overdue()).isTrue();
+        }
+
+        @Test
+        @DisplayName("AC-12-1 한 번도 만들어진 적 없는 할 일을 가리킬 때 열면 \"할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요.\"라는 안내가 돌아온다")
+        void 없는_할_일을_열면_할_일_없음_오류() {
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.get(99L))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
+        }
+
+        @Test
+        @DisplayName("AC-11-2 방금 삭제한 할 일을 가리킬 때 다시 열면 \"할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요.\"라는 안내가 돌아온다")
+        void 삭제한_뒤_열면_할_일_없음_오류() {
+            when(repository.deleteById(1L)).thenReturn(true);
+            when(repository.findById(1L)).thenReturn(Optional.empty());
+
+            service.delete(1L);
+
+            assertThatThrownBy(() -> service.get(1L))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
+        }
+    }
+
+    @Nested
+    @DisplayName("삭제")
+    class Delete {
+
+        @Test
+        @DisplayName("AC-11-1 할 일이 있을 때 삭제하면 그 할 일은 이후 목록과 요약에서 사라진다")
+        void 삭제하면_저장소_삭제를_호출한다() {
+            when(repository.deleteById(1L)).thenReturn(true);
+
+            service.delete(1L);
+
+            verify(repository).deleteById(1L);
+        }
+
+        @Test
+        @DisplayName("AC-12-2 한 번도 만들어진 적 없는 할 일을 가리킬 때 삭제를 시도하면 같은 안내가 돌아오고, 다른 할 일은 바뀌지 않는다")
+        void 없는_할_일을_삭제하면_할_일_없음_오류이고_다른_호출은_없다() {
+            when(repository.deleteById(99L)).thenReturn(false);
+
+            assertThatThrownBy(() -> service.delete(99L))
+                    .isInstanceOfSatisfying(TodoException.class,
+                            e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TODO_NOT_FOUND));
+
+            verify(repository).deleteById(99L);
+            verifyNoMoreInteractions(repository);
+        }
     }
 }

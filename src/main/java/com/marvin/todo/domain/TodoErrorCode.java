@@ -4,5 +4,6 @@ public enum TodoErrorCode {
     TITLE_REQUIRED,
     TITLE_TOO_LONG,
     DESCRIPTION_TOO_LONG,
-    INVALID_DUE_DATE
+    INVALID_DUE_DATE,
+    TODO_NOT_FOUND
 }

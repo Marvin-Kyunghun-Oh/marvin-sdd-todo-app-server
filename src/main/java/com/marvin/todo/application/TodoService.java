@@ -6,6 +6,8 @@ import java.util.List;
 
 import com.marvin.todo.domain.NewTodo;
 import com.marvin.todo.domain.Todo;
+import com.marvin.todo.domain.TodoErrorCode;
+import com.marvin.todo.domain.TodoException;
 import com.marvin.todo.domain.TodoRepository;
 
 public class TodoService {
@@ -30,5 +32,16 @@ public class TodoService {
                 .map(todo -> new TodoView(todo, todo.isOverdue(today)))
                 .toList();
         return new ListResult(items, Summary.of(snapshot));
+    }
+
+    public TodoView get(long id) {
+        Todo todo = repository.findById(id).orElseThrow(() -> new TodoException(TodoErrorCode.TODO_NOT_FOUND));
+        return new TodoView(todo, todo.isOverdue(LocalDate.now(clock)));
+    }
+
+    public void delete(long id) {
+        if (!repository.deleteById(id)) {
+            throw new TodoException(TodoErrorCode.TODO_NOT_FOUND);
+        }
     }
 }
