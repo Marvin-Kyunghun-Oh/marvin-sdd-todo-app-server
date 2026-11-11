@@ -11,12 +11,20 @@ class ApiExceptionHandler {
 
     @ExceptionHandler(TodoException.class)
     ResponseEntity<ErrorResponse> handleTodoException(TodoException exception) {
-        ApiError error = ApiError.from(exception.code());
-        return ResponseEntity.status(error.status()).body(error.toResponse());
+        return respond(ApiError.from(exception.code()));
+    }
+
+    @ExceptionHandler(ApiException.class)
+    ResponseEntity<ErrorResponse> handleApiException(ApiException exception) {
+        return respond(exception.error());
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException exception) {
-        return ResponseEntity.status(ApiError.MALFORMED_REQUEST.status()).body(ApiError.MALFORMED_REQUEST.toResponse());
+        return respond(ApiError.MALFORMED_REQUEST);
+    }
+
+    private static ResponseEntity<ErrorResponse> respond(ApiError error) {
+        return ResponseEntity.status(error.status()).body(error.toResponse());
     }
 }

@@ -3,9 +3,11 @@ package com.marvin.todo.presentation;
 import com.marvin.todo.application.CreateTodoCommand;
 import com.marvin.todo.application.TodoService;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,5 +25,10 @@ class TodoController {
     @ResponseStatus(HttpStatus.CREATED)
     TodoResponse create(@RequestBody CreateTodoRequest request) {
         return TodoResponse.from(service.create(new CreateTodoCommand(request.title())));
+    }
+
+    @GetMapping
+    TodoListResponse list(@RequestParam(name = "status", required = false) String status) {
+        return TodoListResponse.from(service.list(StatusParam.parse(status)));
     }
 }

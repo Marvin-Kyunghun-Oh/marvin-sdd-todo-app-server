@@ -1,8 +1,13 @@
 package com.marvin.todo.presentation;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.stream.Stream;
 
 import com.marvin.todo.application.CreateTodoCommand;
+import com.marvin.todo.application.ListResult;
+import com.marvin.todo.application.StatusFilter;
+import com.marvin.todo.application.Summary;
 import com.marvin.todo.application.TodoService;
 import com.marvin.todo.application.TodoView;
 import com.marvin.todo.config.JacksonConfig;
@@ -27,6 +32,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -178,6 +184,164 @@ class TodoControllerTest {
         @DisplayName("AC-14-3 요청 내용을 읽을 수 없을 때(본문 없음) 처리하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 저장된 내용은 바뀌지 않는다")
         void 본문이_없으면_400_읽을_수_없음() throws Exception {
             거부되고_서비스는_호출되지_않는다("");
+        }
+    }
+
+    @Nested
+    @DisplayName("목록과 요약")
+    class ListTodos {
+
+        private static final Summary FOUR_ONE = new Summary(4, 3, 1, 3);
+        private static final Summary EMPTY = new Summary(0, 0, 0, 0);
+
+        private ListResult 가나다() {
+            return new ListResult(List.of(
+                    new TodoView(new Todo(1L, "가", null, LocalDate.of(2026, 11, 6), false), true),
+                    new TodoView(new Todo(2L, "나", "목적과 범위 정리", LocalDate.of(2026, 11, 12), false), false),
+                    new TodoView(new Todo(3L, "다", null, null, true), false)), FOUR_ONE);
+        }
+
+        @Test
+        @DisplayName("AC-03-1 할 일 \"가\", \"나\", \"다\"가 이 순서로 등록되어 있을 때 목록을 보면 \"가\", \"나\", \"다\" 순서로 돌아온다")
+        void 서비스가_준_순서대로_items가_나온다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(가나다());
+
+            mockMvc.perform(get("/todos"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items[0].title").value("가"))
+                    .andExpect(jsonPath("$.items[1].title").value("나"))
+                    .andExpect(jsonPath("$.items[2].title").value("다"));
+        }
+
+        @Test
+        @DisplayName("AC-03-3 목록을 보면 각 할 일에 대해 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 함께 돌아온다")
+        void 각_항목에_여섯_필드가_있다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(가나다());
+
+            mockMvc.perform(get("/todos"))
+                    .andExpect(jsonPath("$.items[1].id").value(2))
+                    .andExpect(jsonPath("$.items[1].title").value("나"))
+                    .andExpect(jsonPath("$.items[1].description").value("목적과 범위 정리"))
+                    .andExpect(jsonPath("$.items[1].dueDate").value("2026-11-12"))
+                    .andExpect(jsonPath("$.items[1].completed").value(false))
+                    .andExpect(jsonPath("$.items[1].overdue").value(false))
+                    .andExpect(jsonPath("$.items[0].overdue").value(true));
+        }
+
+        @Test
+        @DisplayName("AC-09-3 마감일이 없는 할 일이 있을 때 목록을 보면 마감일 없음으로 돌아온다")
+        void 마감일과_설명이_없으면_null로_나온다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(가나다());
+
+            mockMvc.perform(get("/todos"))
+                    .andExpect(jsonPath("$.items[2].dueDate").value((Object) null))
+                    .andExpect(jsonPath("$.items[2].description").value((Object) null))
+                    .andExpect(jsonPath("$.items[2].length()").value(6));
+        }
+
+        @Test
+        @DisplayName("AC-04-3 진행 중 3개, 완료 1개가 있을 때 전체를 보면 4개가 모두 돌아온다")
+        void status가_없으면_전체로_요청한다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(가나다());
+
+            mockMvc.perform(get("/todos")).andExpect(status().isOk());
+
+            verify(service).list(StatusFilter.ALL);
+        }
+
+        @Test
+        @DisplayName("AC-04-1 진행 중 3개, 완료 1개가 있을 때 진행 중만 보면 진행 중 3개만 등록 순서대로 돌아온다")
+        void status가_active이면_진행_중으로_요청한다() throws Exception {
+            when(service.list(StatusFilter.ACTIVE)).thenReturn(가나다());
+
+            mockMvc.perform(get("/todos").param("status", "active")).andExpect(status().isOk());
+
+            verify(service).list(StatusFilter.ACTIVE);
+        }
+
+        @Test
+        @DisplayName("AC-04-2 진행 중 3개, 완료 1개가 있을 때 완료만 보면 완료 1개만 돌아온다")
+        void status가_done이면_완료로_요청한다() throws Exception {
+            when(service.list(StatusFilter.DONE)).thenReturn(가나다());
+
+            mockMvc.perform(get("/todos").param("status", "done")).andExpect(status().isOk());
+
+            verify(service).list(StatusFilter.DONE);
+        }
+
+        @Test
+        @DisplayName("AC-04-4 완료된 할 일이 하나도 없을 때 완료만 보면 오류 없이 빈 목록이 돌아온다")
+        void 결과가_비면_200과_빈_items다() throws Exception {
+            when(service.list(StatusFilter.DONE)).thenReturn(new ListResult(List.of(), FOUR_ONE));
+
+            mockMvc.perform(get("/todos").param("status", "done"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isEmpty());
+        }
+
+        @Test
+        @DisplayName("AC-13-1 할 일이 하나도 없을 때 목록을 보면 오류 없이 빈 목록과 모든 개수 0이 돌아온다")
+        void 할_일이_없으면_빈_items와_0_요약이다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(new ListResult(List.of(), EMPTY));
+
+            mockMvc.perform(get("/todos"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.items").isEmpty())
+                    .andExpect(jsonPath("$.summary.total").value(0))
+                    .andExpect(jsonPath("$.summary.active").value(0))
+                    .andExpect(jsonPath("$.summary.done").value(0))
+                    .andExpect(jsonPath("$.summary.remaining").value(0));
+        }
+
+        @Test
+        @DisplayName("AC-05-2 완료만 보면서 요약을 함께 받으면 요약 값은 위와 같고, 보기 선택에 영향을 받지 않는다")
+        void 요약은_서비스가_준_값_그대로다() throws Exception {
+            when(service.list(StatusFilter.DONE)).thenReturn(new ListResult(List.of(), FOUR_ONE));
+
+            mockMvc.perform(get("/todos").param("status", "done"))
+                    .andExpect(jsonPath("$.summary.total").value(4))
+                    .andExpect(jsonPath("$.summary.active").value(3))
+                    .andExpect(jsonPath("$.summary.done").value(1))
+                    .andExpect(jsonPath("$.summary.remaining").value(3));
+        }
+
+        @Test
+        @DisplayName("AC-05-3 할 일이 하나도 없을 때 요약을 보면 전체 0, 진행 중 0, 완료 0, 남은 개수 0이 돌아온다")
+        void 요약_네_값이_0이다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(new ListResult(List.of(), EMPTY));
+
+            mockMvc.perform(get("/todos"))
+                    .andExpect(jsonPath("$.summary.length()").value(4))
+                    .andExpect(jsonPath("$.summary.total").value(0));
+        }
+
+        static Stream<Arguments> 허용되지_않는_status() {
+            return Stream.of(
+                    Arguments.of((Object) new String[] {"foo"}),
+                    Arguments.of((Object) new String[] {"ALL"}),
+                    Arguments.of((Object) new String[] {""}),
+                    Arguments.of((Object) new String[] {"active", "done"}));
+        }
+
+        @ParameterizedTest
+        @MethodSource("허용되지_않는_status")
+        @DisplayName("AC-04-5 할 일이 있을 때 전체, 진행 중, 완료 외의 보기 구분으로 목록을 요청하면 거부되고 \"보기 구분이 올바르지 않아요. 전체, 진행 중, 완료 중에서 골라 주세요.\"라는 안내가 돌아온다")
+        void 허용되지_않는_status면_400_보기_구분_오류(String[] values) throws Exception {
+            mockMvc.perform(get("/todos").param("status", values))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("INVALID_STATUS_FILTER"))
+                    .andExpect(jsonPath("$.error.message")
+                            .value("보기 구분이 올바르지 않아요. 전체, 진행 중, 완료 중에서 골라 주세요."));
+
+            verifyNoInteractions(service);
+        }
+
+        @Test
+        @DisplayName("표에 없는 쿼리 파라미터는 무시한다 (API_SPEC 2.2)")
+        void 알_수_없는_파라미터는_무시한다() throws Exception {
+            when(service.list(StatusFilter.ALL)).thenReturn(new ListResult(List.of(), EMPTY));
+
+            mockMvc.perform(get("/todos").param("sort", "dueDate")).andExpect(status().isOk());
         }
     }
 }
