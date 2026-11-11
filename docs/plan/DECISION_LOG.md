@@ -32,11 +32,18 @@
 | TD-25 | 테스트 전략 확정 (리뷰 반영) | 도메인=순수 JUnit, 서비스=JUnit+Mockito, 저장소=JUnit, 웹=`@WebMvcTest`, 통합=`@SpringBootTest`+MockMvc. `Clock.fixed` 사용. 통합 테스트는 `@DirtiesContext(AFTER_EACH_TEST_METHOD)`로 격리. Runner도 단위+통합 테스트 | CLAUDE.md 2.4.1 독립성, 프로덕션에 테스트 전용 메서드 금지 | TRD 9 |
 | TD-26 | 레이어 참조 규칙과 config (리뷰 반영) | presentation은 application과 domain 참조 가능(Todo는 DTO 변환, 예외는 오류 변환 용도). persistence 참조 금지. `config` 패키지는 구성 루트로 `Clock`, Runner, Jackson 설정을 두고 어떤 레이어도 config를 참조하지 않음 | CLAUDE.md 2.3.2 | TRD 2 |
 | TD-27 | `status` 대소문자 (리뷰 반영) | 소문자 `all`, `active`, `done`만 허용. `ALL`은 `INVALID_STATUS_FILTER` | 허용 범위를 좁게 두는 쪽이 단순(YAGNI) | TRD 3.2 |
-| TD-28 | 문서 분리 (리뷰 반영) | 3장(모델)과 5장(API)은 이후 `DATA_MODEL.md`, `API_SPEC.md`로 옮기고 TRD에는 요약만 남김. 옮기기 전까지는 TRD가 기준 | 기준 문서가 두 개가 되는 것을 방지 | TRD 머리말 |
+| TD-28 | 문서 분리 (리뷰 반영, 번호 정정) | 4장(모델, 처음에는 "3장"으로 적었으나 3장은 공통 정책이다)과 5장(API)은 이후 `DATA_MODEL.md`, `API_SPEC.md`로 옮기고 TRD에는 요약만 남김. 옮기기 전까지는 TRD가 기준 | 기준 문서가 두 개가 되는 것을 방지 | TRD 머리말 |
 | TD-29 | Boot 4 의존성 이름 (재검토 반영, 승인됨) | 웹 스타터 `spring-boot-starter-webmvc`(구 `-web`은 deprecated), 테스트 스타터 `spring-boot-starter-webmvc-test`(`spring-boot-starter-test`를 함께 가져옴), Jackson 3(`tools.jackson`), JUnit 6. 테스트 스타터는 새 의존성 이름이라 승인 필요 | Boot 4.1.2 공식 문서와 4.0 마이그레이션 가이드로 확인(2026-11-11). `@WebMvcTest`가 `spring-boot-webmvc-test` 모듈로 분리됨 | TRD 1 |
 | TD-30 | id 검사 위치와 415/406 (재검토 반영) | id 형식·범위 검사는 컨트롤러에서 직접 한다(`Converter`, 파라미터 순서 의존 없음). 415/406은 D-37에 따라 `MALFORMED_REQUEST`(400)로 변환 | 순서를 정하지 않기로 했으므로 단순한 쪽을 택함(TD-22). catch-all 처리기가 있으면 변환하지 않은 415/406이 500이 되므로 명시적으로 변환 | TRD 3.3, 3.2 |
 | TD-31 | 커버리지 검증 연결 (재검토 반영) | `jacocoTestCoverageVerification`을 `check`에 연결 | `./gradlew build`만으로 80% 기준(2.4.2)이 지켜짐 | TRD 1, 9 |
 | TD-32 | 멈추는 규칙 (재검토 반영) | 명세에 없는 프레임워크 수준 오류는 기존 코드 중 하나로 보내고 새 문구는 만들지 않는다. D-34, D-35는 유지하고 415/406은 D-31로 흡수(D-37) | Spring 기본 오류 응답은 `{error:{code,message}}`와 모양이 달라 FR-14, AC-14-1, 헌법 2.4.3을 어김. 반대로 새 문구가 계속 늘어나는 것도 막아야 함 | TRD 6 |
+| TD-33 | "공백"의 범위 | 유니코드 공백(`String.strip()`). 전각 공백(U+3000) 포함. U+00A0, U+200B 등은 공백으로 보지 않는 한계를 인정 | 한글 입력에서 전각 공백만 넣은 제목이 AC-02-2를 우회하지 않게 함 | DATA_MODEL 2.1 |
+| TD-34 | 마감일 텍스트 엄격도 | `YYYY-MM-DD`(ASCII 숫자 4-2-2, 실제 달력 날짜)만 허용. 앞뒤 공백 미제거, `""`은 `INVALID_DUE_DATE`. 지우는 방법은 `null` 하나 | 마감일 없음의 표현을 하나로 유지(TD-18). 날짜 패턴만으로는 5자리 연도가 통과하므로 정규식으로 먼저 거름 | DATA_MODEL 2.3 |
+| TD-35 | 저장소 계약 위치와 반환형 | 계약은 DATA_MODEL 6장이 기준, TRD 3.1은 링크만. `findById`/`update`는 `Optional`, `findAll`은 id 오름차순 불변 `List`, `deleteById`는 `boolean`. `update`가 id를 바꾸면 거부 | 기준 문서가 둘이 되는 것을 방지(TD-28) | DATA_MODEL 6, TRD 3.1 |
+| TD-36 | 불변식 위치와 입력 타입 | `Todo`는 `record`, 정규화와 검증은 도메인 팩토리 한 곳. `NewTodo(title)`, 수정 입력은 `(title, description, dueDateText, completed)`로 기존 값을 교체 | 규칙을 어긴 `Todo`가 존재할 수 없게 함. FR-01·D-06은 추가 시 제목만 받음 | DATA_MODEL 2, 4 |
+| TD-37 | 기준 시각과 요약 정의 | "오늘"은 요청 처리마다 `LocalDate.now(clock)` 한 번. 요약은 `application` 값 객체로 `findAll()` 스냅샷에서 계산, `remaining = active` | 한 응답 안의 항목이 서로 다른 "오늘"을 쓰지 않게 함(AC-05-2) | DATA_MODEL 3 |
+| TD-38 | 상태별 보기 필터 위치 | 저장소가 아니라 `application`이 `findAll()` 결과를 거름 | 필터와 요약이 같은 스냅샷에서 나와 어긋나지 않음. 저장소 계약이 작아짐(YAGNI) | DATA_MODEL 6 |
+| TD-39 | DTO 변환 규칙 | 요청 DTO(`dueDate`는 `JsonNode`) → `presentation` 매퍼 → `NewTodo`/수정 입력 → `Todo` → 응답 DTO. 정규화는 `domain`만 한다. `dueDate`는 ISO 문자열 또는 `null`, `description` 없음도 `null`로 내보냄 | CLAUDE.md 2.3.2, 2.3.3, TD-20 | DATA_MODEL 5 |
 
 ## 명세로 올려 승인된 항목
 TRD가 정하지 않고 `docs/spec/`에 올려 승인받은 항목은 D-32(`completed` 누락), D-33(id가 번호가 아님), D-34(500), D-35(없는 경로/허용되지 않은 메서드)이다. TRD 6장의 표시는 지웠다.

@@ -3,7 +3,7 @@
 > SDD 2단계(Plan) 산출물. 상태: **확정 (2026-11-11, Marvin-Oh)**
 > 근거 표기: `FR-xx`/`AC-xx-x`는 `docs/spec/REQUIREMENTS.md`, `D-xx`는 `docs/spec/DECISION_LOG.md`, `TD-xx`는 `docs/plan/DECISION_LOG.md`, `CLAUDE.md x.x`는 헌법.
 > 충돌 시 명세가 우선한다 (CLAUDE.md 2.2.5). 명세에 없는 실패 상황은 이 문서에서 정하지 않고 명세 제안(D-32~D-35)으로 올려 승인받았다 (8장).
-> 3장(모델)과 5장(API)은 이후 `DATA_MODEL.md`, `API_SPEC.md`로 옮기고 TRD에는 결정 요약만 남긴다 (TD-28). 옮기기 전까지는 이 문서가 기준이다.
+> 4장(도메인 모델)은 `DATA_MODEL.md`로 옮겼다 (TD-28, TD-35). 5장(API)은 이후 `API_SPEC.md`로 옮기고 TRD에는 결정 요약만 남긴다. 옮기기 전의 5장은 이 문서가 기준이다.
 
 ## 1. 기술 스택 (TD-01, TD-02, TD-12, TD-16, TD-17, TD-23, CLAUDE.md 4장)
 | 항목 | 선택 | 이유 (한 줄) |
@@ -50,7 +50,7 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
 - 서비스 메서드 하나가 작업 단위다. `@Transactional`은 쓰지 않는다 (인메모리라 트랜잭션 매니저가 없음, TD-02).
 - `Todo`는 불변 객체다. 수정은 사본을 만들어 검증한 뒤 저장소에 교체한다. 검증이 실패하면 저장소를 건드리지 않으므로 원본이 바뀌지 않는다 (AC-08-3, AC-12-2, AC-14-2).
 - `InMemoryTodoRepository`는 스레드에 안전하다. id는 `AtomicLong`으로 발급해 중복이 없고, 저장은 `ConcurrentSkipListMap<Long, Todo>`(id 순 = 등록 순서, D-11)에 한다. 읽고 고치는 동작(`update`)은 맵의 원자적 연산으로 한다.
-- 저장소 인터페이스: `create(NewTodo)`, `findById`, `findAll`, `update(id, UnaryOperator<Todo>)`, `deleteById`. 삭제된 id는 재사용하지 않는다 (TD-03).
+- 저장소 인터페이스(메서드, id 발급, 삭제된 id 미재사용, 정렬 기준)의 계약은 [`DATA_MODEL.md` 6장](DATA_MODEL.md)이 기준이다 (TD-03, TD-35).
 - 목록과 요약은 `findAll()` 한 번의 결과에서 함께 계산한다. 같은 응답 안에서 서로 어긋나지 않는다 (AC-05-2).
 
 ### 3.2 요청 읽기 정책 (TD-20, TD-21)
@@ -76,17 +76,11 @@ config (구성 루트: 모든 레이어를 조립, 어떤 레이어도 config를
 
 "없는 id면 본문 검증보다 404가 먼저"라는 규칙은 **3번과 4번 사이, 즉 값 검증 오류에만** 적용된다. 읽기 실패(2번)는 컨트롤러에 닿기 전이나 DTO 단계에서 실패하므로 id 존재 여부(3번)보다 먼저 400이다 (TD-19).
 
-## 4. 도메인 모델 (FR-01, FR-08, FR-09, TD-03)
-| 필드 | 타입 | 규칙 | 근거 |
-| --- | --- | --- | --- |
-| id | `long` | 1부터 자동 증가. 삭제된 id는 재사용하지 않는다 | TD-03, D-26, AC-12-1 |
-| title | `String` | 공백 제거 후 1~100 코드포인트 | FR-02, D-01, D-03, D-28 |
-| description | `String` (null 허용) | 공백 제거 후 0~1,000 코드포인트. 빈 값은 null | FR-02, D-02, D-27 |
-| dueDate | `LocalDate` (null 허용) | 과거 날짜 허용 | FR-09, D-25 |
-| completed | `boolean` | 새 할 일은 false | FR-01 |
-
-- 기한 지남(`overdue`)은 저장하지 않고 조회 시 `Clock` 기준 오늘로 계산한다: `!completed && dueDate != null && dueDate < today` (FR-10, D-08, D-09, D-10).
-- 글자 수는 `String.codePointCount`로 센다. ZWJ 조합 이모지(예: 👨‍👩‍👧)나 국기는 2자 이상으로 센다. 이는 알려진 한계다 (TD-10, D-28).
+## 4. 도메인 모델 (FR-01, FR-08, FR-09, TD-03, TD-28)
+상세는 [`DATA_MODEL.md`](DATA_MODEL.md)가 기준이다. 요약만 남긴다.
+- `Todo`: `id`(long), `title`, `description`(null 허용), `dueDate`(`LocalDate`, null 허용), `completed`. 불변 `record`이고 도메인 팩토리를 거쳐야만 만들어진다 (DATA_MODEL 1, 2).
+- 공백 제거는 유니코드 공백(`strip()`), 글자 수는 코드포인트, 마감일 텍스트는 엄격한 `YYYY-MM-DD` (D-03, D-27, D-28, TD-10, TD-33, TD-34).
+- 기한 지남(`overdue`)과 요약은 저장하지 않고 요청마다 `Clock` 기준 오늘로 계산한다 (FR-05, FR-10, DATA_MODEL 3).
 - id가 곧 등록 순서다 (D-11, FR-03).
 
 ## 5. API 설계 (TD-04~TD-07)
