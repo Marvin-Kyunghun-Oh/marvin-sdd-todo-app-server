@@ -3,6 +3,7 @@ package com.marvin.todo.presentation;
 import com.marvin.todo.application.CreateTodoCommand;
 import com.marvin.todo.application.TodoService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -16,7 +17,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/todos")
+@RequestMapping(path = "/todos", produces = MediaType.APPLICATION_JSON_VALUE)
 class TodoController {
 
     private final TodoService service;
