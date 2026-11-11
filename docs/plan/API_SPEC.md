@@ -1,6 +1,6 @@
 # API_SPEC — Marvin's Todo App 서버
 
-> SDD 2단계(Plan) 산출물. 상태: **초안 (2026-11-11)**
+> SDD 2단계(Plan) 산출물. 상태: **확정 (2026-11-11, Marvin-Oh)**
 > 화면 개발자가 이 문서만 보고 서버를 호출할 수 있도록 쓴 호출 계약이다. TRD 5장(API 설계)과 6장의 오류 코드 표를 옮겨 온 문서다 (TD-28, TD-46).
 > 근거 표기: `FR-xx`/`AC-xx-x`는 `docs/spec/REQUIREMENTS.md`, `D-xx`는 `docs/spec/DECISION_LOG.md`, `TD-xx`는 `docs/plan/DECISION_LOG.md`.
 > 필드의 타입, 불변식, 정규화 규칙은 [`DATA_MODEL.md`](DATA_MODEL.md)가 기준이고 여기서 반복하지 않는다. 처리 순서와 요청 읽기 정책의 구현 방식은 [`TRD.md`](TRD.md) 3장이 기준이다.
@@ -89,8 +89,8 @@
 3. id의 할 일이 없으면 404 `TODO_NOT_FOUND`.
 4. 값 검증 오류: 제목 → 설명 → 마감일 순.
 
-- 읽기 실패(2번)는 항상 없는 id(3번)보다 먼저다. 값 검증 오류(4번)보다는 없는 id(3번)가 먼저다.
-- id 형식 오류(1번)와 본문 읽기 실패(2번)가 한 요청에 겹칠 때 어느 쪽이 나올지는 정하지 않는다 (TD-22).
+- 본문 읽기 실패(2번)는 항상 없는 id(3번)보다 먼저다. 값 검증 오류(4번)보다는 없는 id(3번)가 먼저다.
+- id 형식 오류(1번)와 본문 읽기 실패(2번)가 한 요청에 겹칠 때, 그리고 `Accept` 불일치가 id 형식 오류(1번)나 없는 id(3번)와 겹칠 때 어느 쪽이 나올지는 **정하지 않는다** (TD-22, TD-52).
 
 ## 2. 엔드포인트
 아래 각 표의 `INTERNAL_ERROR`(500)와 1.1의 `ENDPOINT_NOT_FOUND`/`METHOD_NOT_ALLOWED`는 모든 엔드포인트에서 날 수 있다. 각 표에는 `Accept` 불일치로 나는 `MALFORMED_REQUEST`도 포함한다 (1.2).
