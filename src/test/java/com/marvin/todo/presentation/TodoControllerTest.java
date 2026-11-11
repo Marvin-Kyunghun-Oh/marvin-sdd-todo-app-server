@@ -5,16 +5,19 @@ import java.util.stream.Stream;
 import com.marvin.todo.application.CreateTodoCommand;
 import com.marvin.todo.application.TodoService;
 import com.marvin.todo.application.TodoView;
+import com.marvin.todo.config.JacksonConfig;
 import com.marvin.todo.domain.Todo;
 import com.marvin.todo.domain.TodoErrorCode;
 import com.marvin.todo.domain.TodoException;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,12 +25,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(TodoController.class)
+@Import(JacksonConfig.class)
 class TodoControllerTest {
 
     @Autowired
@@ -134,5 +139,45 @@ class TodoControllerTest {
                 .andExpect(status().is(expectedStatus))
                 .andExpect(jsonPath("$.error.code").value(code.name()))
                 .andExpect(jsonPath("$.error.message").value(expectedMessage));
+    }
+
+    @Nested
+    @DisplayName("요청 본문 읽기 정책")
+    class RequestBodyPolicy {
+
+        private static final String MALFORMED_MESSAGE = "요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.";
+
+        private void 거부되고_서비스는_호출되지_않는다(String body) throws Exception {
+            postTodo(body)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"))
+                    .andExpect(jsonPath("$.error.message").value(MALFORMED_MESSAGE));
+
+            verifyNoInteractions(service);
+        }
+
+        @Test
+        @DisplayName("AC-14-3 요청 내용을 읽을 수 없을 때(값의 종류가 맞지 않음) 처리하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 저장된 내용은 바뀌지 않는다")
+        void 값의_종류가_맞지_않으면_400_읽을_수_없음() throws Exception {
+            거부되고_서비스는_호출되지_않는다("{\"title\":123}");
+        }
+
+        @Test
+        @DisplayName("AC-14-3 요청 내용을 읽을 수 없을 때(깨진 형식) 처리하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 저장된 내용은 바뀌지 않는다")
+        void 깨진_JSON이면_400_읽을_수_없음() throws Exception {
+            거부되고_서비스는_호출되지_않는다("{\"title\":");
+        }
+
+        @Test
+        @DisplayName("AC-14-3 요청 내용을 읽을 수 없을 때(알 수 없는 항목) 처리하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 저장된 내용은 바뀌지 않는다")
+        void 알_수_없는_필드가_있으면_400_읽을_수_없음() throws Exception {
+            거부되고_서비스는_호출되지_않는다("{\"title\":\"장보기\",\"description\":\"설명\"}");
+        }
+
+        @Test
+        @DisplayName("AC-14-3 요청 내용을 읽을 수 없을 때(본문 없음) 처리하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 저장된 내용은 바뀌지 않는다")
+        void 본문이_없으면_400_읽을_수_없음() throws Exception {
+            거부되고_서비스는_호출되지_않는다("");
+        }
     }
 }
