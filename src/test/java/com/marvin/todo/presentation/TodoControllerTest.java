@@ -10,6 +10,7 @@ import com.marvin.todo.application.StatusFilter;
 import com.marvin.todo.application.Summary;
 import com.marvin.todo.application.TodoService;
 import com.marvin.todo.application.TodoView;
+import com.marvin.todo.application.UpdateTodoCommand;
 import com.marvin.todo.config.JacksonConfig;
 import com.marvin.todo.domain.Todo;
 import com.marvin.todo.domain.TodoErrorCode;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -27,8 +29,10 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -36,6 +40,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,7 +56,7 @@ class TodoControllerTest {
     @MockitoBean
     private TodoService service;
 
-    private org.springframework.test.web.servlet.ResultActions postTodo(String body) throws Exception {
+    private ResultActions postTodo(String body) throws Exception {
         return mockMvc.perform(post("/todos").contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
@@ -428,6 +433,176 @@ class TodoControllerTest {
                     .andExpect(jsonPath("$.error.message").value(NOT_FOUND_MESSAGE));
 
             verifyNoInteractions(service);
+        }
+    }
+
+    @Nested
+    @DisplayName("수정")
+    class Put {
+
+        private ResultActions putTodo(String id, String body) throws Exception {
+            return mockMvc.perform(put("/todos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(body));
+        }
+
+        private String body(String dueDateJson) {
+            return "{\"title\":\"PRD 초안\",\"dueDate\":" + dueDateJson + ",\"completed\":false}";
+        }
+
+        @Test
+        @DisplayName("AC-08-1 제목 \"PRD 초안\", 마감일 없음인 할 일이 있을 때 제목을 \"PRD 초안 작성하기\", 설명을 \"목적과 범위 정리\", 마감일을 2026-11-12로 저장하면 세 값이 모두 반영되어 돌아온다")
+        void 세_값이_반영되어_돌아오고_서비스에_같은_값이_넘어간다() throws Exception {
+            UpdateTodoCommand command = new UpdateTodoCommand("PRD 초안 작성하기", "목적과 범위 정리", "2026-11-12", false);
+            when(service.update(2L, command)).thenReturn(new TodoView(
+                    new Todo(2L, "PRD 초안 작성하기", "목적과 범위 정리", LocalDate.of(2026, 11, 12), false), false));
+
+            putTodo("2", "{\"title\":\"PRD 초안 작성하기\",\"description\":\"목적과 범위 정리\","
+                    + "\"dueDate\":\"2026-11-12\",\"completed\":false}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(2))
+                    .andExpect(jsonPath("$.title").value("PRD 초안 작성하기"))
+                    .andExpect(jsonPath("$.description").value("목적과 범위 정리"))
+                    .andExpect(jsonPath("$.dueDate").value("2026-11-12"));
+
+            verify(service).update(2L, command);
+        }
+
+        @Test
+        @DisplayName("AC-08-2 진행 중인 할 일이 있을 때 수정에서 완료로 표시하여 저장하면 완료 상태가 된다")
+        void completed_true가_서비스에_넘어가고_응답이_완료다() throws Exception {
+            UpdateTodoCommand command = new UpdateTodoCommand("PRD 초안", null, null, true);
+            when(service.update(1L, command)).thenReturn(new TodoView(new Todo(1L, "PRD 초안", null, null, true), false));
+
+            putTodo("1", "{\"title\":\"PRD 초안\",\"completed\":true}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.completed").value(true));
+
+            verify(service).update(1L, command);
+        }
+
+        @Test
+        @DisplayName("AC-09-1 마감일이 없는 할 일이 있을 때 마감일 2026-11-12를 지정하면 마감일이 2026-11-12로 저장된다")
+        void dueDate가_텍스트_그대로_서비스에_넘어간다() throws Exception {
+            when(service.update(eq(1L), any())).thenReturn(new TodoView(
+                    new Todo(1L, "PRD 초안", null, LocalDate.of(2026, 11, 12), false), false));
+
+            putTodo("1", body("\"2026-11-12\"")).andExpect(status().isOk());
+
+            verify(service).update(1L, new UpdateTodoCommand("PRD 초안", null, "2026-11-12", false));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"null", "ABSENT"})
+        @DisplayName("AC-09-2 마감일이 있는 할 일이 있을 때 마감일을 지우면 마감일 없음 상태가 되고, 기한 지남이 아니다")
+        void dueDate가_null이거나_없으면_마감일_없음으로_넘어간다(String dueDateJson) throws Exception {
+            when(service.update(eq(1L), any())).thenReturn(new TodoView(new Todo(1L, "PRD 초안", null, null, false), false));
+            String json = dueDateJson.equals("ABSENT")
+                    ? "{\"title\":\"PRD 초안\",\"completed\":false}"
+                    : body(dueDateJson);
+
+            putTodo("1", json)
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.dueDate").value((Object) null))
+                    .andExpect(jsonPath("$.overdue").value(false));
+
+            verify(service).update(1L, new UpdateTodoCommand("PRD 초안", null, null, false));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"\"\"", "\"   \""})
+        @DisplayName("AC-09-6 마감일이 있는 할 일이 있을 때 마감일을 빈 문자열이나 공백 문자로만 이루어진 값으로 저장하면 마감일 없음 상태가 되고, 기한 지남이 아니다")
+        void 빈_문자열_마감일은_그대로_서비스에_넘어간다(String dueDateJson) throws Exception {
+            when(service.update(eq(1L), any())).thenReturn(new TodoView(new Todo(1L, "PRD 초안", null, null, false), false));
+
+            putTodo("1", body(dueDateJson)).andExpect(status().isOk());
+
+            verify(service).update(1L, new UpdateTodoCommand("PRD 초안", null, dueDateJson.substring(1, dueDateJson.length() - 1), false));
+        }
+
+        static Stream<Arguments> 날짜가_아닌_마감일() {
+            return Stream.of(
+                    Arguments.of("\"abc\"", "abc"),
+                    Arguments.of("123", "123"),
+                    Arguments.of("true", "true"),
+                    Arguments.of("{\"a\":1}", "{\"a\":1}"),
+                    Arguments.of("[1]", "[1]"));
+        }
+
+        @ParameterizedTest
+        @MethodSource("날짜가_아닌_마감일")
+        @DisplayName("AC-09-4 날짜가 아닌 값을 마감일로 보낼 때 저장하면 \"마감일을 올바른 날짜로 입력해 주세요.\"라는 안내가 돌아온다")
+        void 날짜가_아니면_400_마감일_오류이고_원문이_서비스에_넘어간다(String dueDateJson, String expectedText) throws Exception {
+            when(service.update(eq(1L), any())).thenThrow(new TodoException(TodoErrorCode.INVALID_DUE_DATE));
+
+            putTodo("1", body(dueDateJson))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("INVALID_DUE_DATE"))
+                    .andExpect(jsonPath("$.error.message").value("마감일을 올바른 날짜로 입력해 주세요."));
+
+            verify(service).update(1L, new UpdateTodoCommand("PRD 초안", null, expectedText, false));
+        }
+
+        @Test
+        @DisplayName("AC-02-5 기존 할 일이 있을 때 제목을 비우거나 공백만 넣어 수정하면 수정은 거부되고 \"제목을 입력해 주세요.\"라는 안내가 돌아오며 기존 내용은 그대로다")
+        void 제목_없음은_400_제목_없음이다() throws Exception {
+            when(service.update(eq(1L), any())).thenThrow(new TodoException(TodoErrorCode.TITLE_REQUIRED));
+
+            putTodo("1", "{\"title\":\"  \",\"completed\":false}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("TITLE_REQUIRED"))
+                    .andExpect(jsonPath("$.error.message").value("제목을 입력해 주세요."));
+        }
+
+        @Test
+        @DisplayName("AC-02-6 설명이 1,001자일 때 추가 또는 수정하면 거부되고 \"설명은 1,000자 이하로 입력해 주세요.\"라는 안내가 돌아온다")
+        void 설명이_너무_길면_400_설명_너무_김() throws Exception {
+            when(service.update(eq(1L), any())).thenThrow(new TodoException(TodoErrorCode.DESCRIPTION_TOO_LONG));
+
+            putTodo("1", "{\"title\":\"PRD 초안\",\"description\":\"" + "가".repeat(1001) + "\",\"completed\":false}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("DESCRIPTION_TOO_LONG"))
+                    .andExpect(jsonPath("$.error.message").value("설명은 1,000자 이하로 입력해 주세요."));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"{\"title\":\"PRD 초안\"}", "{\"title\":\"PRD 초안\",\"completed\":null}"})
+        @DisplayName("AC-08-7 할 일이 있을 때 완료 여부 없이 수정을 저장하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 기존 내용은 그대로다")
+        void completed가_없으면_400_읽을_수_없음이고_서비스는_호출되지_않는다(String json) throws Exception {
+            putTodo("1", json)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"))
+                    .andExpect(jsonPath("$.error.message").value("요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요."));
+
+            verifyNoInteractions(service);
+        }
+
+        @Test
+        @DisplayName("AC-12-2 한 번도 만들어진 적 없는 할 일을 가리킬 때 수정을 시도하면 같은 안내가 돌아오고, 다른 할 일은 바뀌지 않는다")
+        void 서비스가_할_일_없음을_주면_404다() throws Exception {
+            when(service.update(eq(99L), any())).thenThrow(new TodoException(TodoErrorCode.TODO_NOT_FOUND));
+
+            putTodo("99", "{\"title\":\"PRD 초안\",\"completed\":false}")
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"))
+                    .andExpect(jsonPath("$.error.message").value("할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요."));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"abc", "0", "-1", "01", "+1", "1.5", "99999999999999999999"})
+        @DisplayName("AC-12-3 번호로 읽을 수 없는 값(예: \"abc\", 0, 음수)으로 할 일을 가리킬 때 수정을 시도하면 존재하지 않는 할 일과 같은 안내가 돌아온다")
+        void 번호로_읽을_수_없으면_404이고_서비스는_호출되지_않는다(String id) throws Exception {
+            putTodo(id, "{\"title\":\"PRD 초안\",\"completed\":false}")
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"));
+
+            verifyNoInteractions(service);
+        }
+
+        @Test
+        @DisplayName("본문을 읽을 수 없으면 id가 가리키는 할 일이 없어도 404보다 400이 먼저다 (TRD 3.3, TD-19)")
+        void 없는_id여도_본문을_읽을_수_없으면_400이_먼저다() throws Exception {
+            putTodo("99", "{\"title\":\"PRD 초안\"}")
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"));
         }
     }
 }
