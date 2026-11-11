@@ -1,0 +1,27 @@
+package com.marvin.todo.presentation;
+
+import com.marvin.todo.application.CreateTodoCommand;
+import com.marvin.todo.application.TodoService;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/todos")
+class TodoController {
+
+    private final TodoService service;
+
+    TodoController(TodoService service) {
+        this.service = service;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    TodoResponse create(@RequestBody CreateTodoRequest request) {
+        return TodoResponse.from(service.create(new CreateTodoCommand(request.title())));
+    }
+}
