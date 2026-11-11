@@ -1,6 +1,6 @@
 # DATA_MODEL — Marvin's Todo App 서버
 
-> SDD 2단계(Plan) 산출물. 상태: **초안 (2026-11-11)**
+> SDD 2단계(Plan) 산출물. 상태: **확정 (2026-11-11, Marvin-Oh)**
 > TRD 4장(도메인 모델)과 3.1절의 저장소 계약을 옮겨 온 문서다 (TD-28, TD-35). 이 문서가 데이터의 모양과 규칙의 기준이다.
 > 근거 표기: `FR-xx`/`AC-xx-x`는 `docs/spec/REQUIREMENTS.md`, `D-xx`는 `docs/spec/DECISION_LOG.md`, `TD-xx`는 `docs/plan/DECISION_LOG.md`, `TRD n`은 `docs/plan/TRD.md`의 n장.
 > 경로, HTTP 메서드, 상태 코드는 `API_SPEC.md`에서 다룬다. 명세와 TRD에 없는 필드(생성 시각 등)는 두지 않는다 (CLAUDE.md 2.1.5, PRD 5.2 "완료 시각 기록").
