@@ -1,5 +1,7 @@
 package com.marvin.todo.domain;
 
+import java.time.LocalDate;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -60,5 +62,57 @@ class TodoUpdateTest {
         assertThatThrownBy(() -> update("", "가".repeat(1001)))
                 .isInstanceOfSatisfying(TodoException.class,
                         e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TITLE_REQUIRED));
+    }
+
+    private static TodoUpdate updateWithDueDate(String rawDueDateText) {
+        return TodoUpdate.of("제목", null, rawDueDateText, false);
+    }
+
+    @Test
+    @DisplayName("AC-09-1 마감일이 없는 할 일이 있을 때 마감일 2026-11-12를 지정하면 마감일이 2026-11-12로 저장된다")
+    void 마감일을_지정하면_그_날짜가_된다() {
+        assertThat(updateWithDueDate("2026-11-12").dueDate()).isEqualTo(LocalDate.of(2026, 11, 12));
+    }
+
+    @Test
+    @DisplayName("마감일 앞뒤에 공백이 있어도 공백을 제거한 뒤 읽는다 (설계)")
+    void 마감일_앞뒤_공백은_제거하고_읽는다() {
+        assertThat(updateWithDueDate(" 2026-11-12\u3000").dueDate()).isEqualTo(LocalDate.of(2026, 11, 12));
+    }
+
+    @Test
+    @DisplayName("AC-09-2 마감일이 있는 할 일이 있을 때 마감일을 지우면 마감일 없음 상태가 된다")
+    void 마감일이_null이면_마감일_없음() {
+        assertThat(updateWithDueDate(null).dueDate()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", " ", "   ", "\t\n", "\u3000"})
+    @DisplayName("AC-09-6 마감일이 있는 할 일이 있을 때 마감일을 빈 문자열이나 공백 문자로만 이루어진 값으로 저장하면 마감일 없음 상태가 된다")
+    void 마감일이_빈_문자열이나_공백뿐이면_마감일_없음(String rawDueDateText) {
+        assertThat(updateWithDueDate(rawDueDateText).dueDate()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "2026-02-30", "2026-1-5", "2026-11-12T00:00", "+12345-01-01", "123", "true"})
+    @DisplayName("AC-09-4 날짜가 아닌 값을 마감일로 보낼 때 저장하면 \"마감일을 올바른 날짜로 입력해 주세요.\"라는 안내가 돌아온다")
+    void 날짜가_아닌_마감일은_마감일_오류(String rawDueDateText) {
+        assertThatThrownBy(() -> updateWithDueDate(rawDueDateText))
+                .isInstanceOfSatisfying(TodoException.class,
+                        e -> assertThat(e.code()).isEqualTo(TodoErrorCode.INVALID_DUE_DATE));
+    }
+
+    @Test
+    @DisplayName("AC-09-5 오늘이 2026-11-10일 때 마감일을 2026-11-01로 지정하면 저장되고 기한 지남이다 (도메인은 오늘을 모르므로 과거 날짜를 거부하지 않음)")
+    void 과거_날짜도_마감일로_거부되지_않는다() {
+        assertThat(updateWithDueDate("2026-11-01").dueDate()).isEqualTo(LocalDate.of(2026, 11, 1));
+    }
+
+    @Test
+    @DisplayName("오류가 여러 개여도 첫 오류 하나만 알려 준다 (검증 순서: 설명이 마감일보다 먼저)")
+    void 설명과_마감일이_모두_잘못되면_설명_오류만_난다() {
+        assertThatThrownBy(() -> TodoUpdate.of("제목", "가".repeat(1001), "abc", false))
+                .isInstanceOfSatisfying(TodoException.class,
+                        e -> assertThat(e.code()).isEqualTo(TodoErrorCode.DESCRIPTION_TOO_LONG));
     }
 }

@@ -1,9 +1,14 @@
 package com.marvin.todo.domain;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.regex.Pattern;
+
 final class TextRules {
 
     private static final int MAX_TITLE_LENGTH = 100;
     private static final int MAX_DESCRIPTION_LENGTH = 1000;
+    private static final Pattern DUE_DATE_FORMAT = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
 
     private TextRules() {
     }
@@ -28,6 +33,21 @@ final class TextRules {
             throw new TodoException(TodoErrorCode.DESCRIPTION_TOO_LONG);
         }
         return description;
+    }
+
+    static LocalDate dueDate(String rawDueDateText) {
+        if (rawDueDateText == null || rawDueDateText.isBlank()) {
+            return null;
+        }
+        String text = rawDueDateText.strip();
+        if (!DUE_DATE_FORMAT.matcher(text).matches()) {
+            throw new TodoException(TodoErrorCode.INVALID_DUE_DATE);
+        }
+        try {
+            return LocalDate.parse(text);
+        } catch (DateTimeParseException e) {
+            throw new TodoException(TodoErrorCode.INVALID_DUE_DATE);
+        }
     }
 
     private static int length(String text) {

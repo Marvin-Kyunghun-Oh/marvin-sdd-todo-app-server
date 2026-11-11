@@ -7,6 +7,7 @@ public record TodoUpdate(String title, String description, LocalDate dueDate, bo
     public static TodoUpdate of(String rawTitle, String rawDescription, String rawDueDateText, boolean completed) {
         String title = TextRules.title(rawTitle);
         String description = TextRules.description(rawDescription);
-        return new TodoUpdate(title, description, null, completed);
+        LocalDate dueDate = TextRules.dueDate(rawDueDateText);
+        return new TodoUpdate(title, description, dueDate, completed);
     }
 }
