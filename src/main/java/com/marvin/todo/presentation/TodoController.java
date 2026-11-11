@@ -5,6 +5,7 @@ import com.marvin.todo.application.TodoService;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -49,5 +50,10 @@ class TodoController {
     @PutMapping("/{id}")
     TodoResponse update(@PathVariable("id") String id, @RequestBody UpdateTodoRequest request) {
         return TodoResponse.from(service.update(PathId.parse(id), request.toCommand()));
+    }
+
+    @PatchMapping("/{id}")
+    TodoResponse markCompleted(@PathVariable("id") String id, @RequestBody CompleteTodoRequest request) {
+        return TodoResponse.from(service.markCompleted(PathId.parse(id), request.requireCompleted()));
     }
 }

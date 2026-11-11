@@ -39,6 +39,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
@@ -603,6 +604,90 @@ class TodoControllerTest {
             putTodo("99", "{\"title\":\"PRD 초안\"}")
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"));
+        }
+    }
+
+    @Nested
+    @DisplayName("완료 표시")
+    class Patch {
+
+        private ResultActions patchTodo(String id, String body) throws Exception {
+            return mockMvc.perform(patch("/todos/{id}", id).contentType(MediaType.APPLICATION_JSON).content(body));
+        }
+
+        @Test
+        @DisplayName("AC-06-1 진행 중인 할 일이 있을 때 완료로 표시하면 그 할 일은 완료가 되고 요약의 진행 중은 1 줄고 완료는 1 는다")
+        void 완료로_표시하면_200과_완료_상태다() throws Exception {
+            when(service.markCompleted(1L, true)).thenReturn(new TodoView(new Todo(1L, "가", null, null, true), false));
+
+            patchTodo("1", "{\"completed\":true}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(1))
+                    .andExpect(jsonPath("$.completed").value(true));
+
+            verify(service).markCompleted(1L, true);
+        }
+
+        @Test
+        @DisplayName("AC-06-2 완료된 할 일이 있을 때 진행 중으로 되돌리면 그 할 일은 진행 중이 되고 요약이 그에 맞게 바뀐다")
+        void 되돌리면_200과_진행_중_상태다() throws Exception {
+            when(service.markCompleted(1L, false)).thenReturn(new TodoView(new Todo(1L, "가", null, null, false), false));
+
+            patchTodo("1", "{\"completed\":false}")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.completed").value(false));
+
+            verify(service).markCompleted(1L, false);
+        }
+
+        @Test
+        @DisplayName("AC-06-3 이미 완료된 할 일에 다시 완료로 표시하면 오류 없이 완료 상태가 유지된다")
+        void 이미_완료여도_200이다() throws Exception {
+            when(service.markCompleted(1L, true)).thenReturn(new TodoView(new Todo(1L, "가", null, null, true), false));
+
+            patchTodo("1", "{\"completed\":true}").andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("AC-06-4 이미 진행 중인 할 일에 다시 진행 중으로 되돌리면 오류 없이 진행 중 상태가 유지된다")
+        void 이미_진행_중이어도_200이다() throws Exception {
+            when(service.markCompleted(1L, false)).thenReturn(new TodoView(new Todo(1L, "가", null, null, false), false));
+
+            patchTodo("1", "{\"completed\":false}").andExpect(status().isOk());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"{}", "{\"completed\":null}"})
+        @DisplayName("AC-06-5 할 일이 있을 때 완료 여부 없이 완료 표시를 요청하면 거부되고 \"요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요.\"라는 안내가 돌아오며 할 일은 바뀌지 않는다")
+        void completed가_없으면_400_읽을_수_없음이고_서비스는_호출되지_않는다(String json) throws Exception {
+            patchTodo("1", json)
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error.code").value("MALFORMED_REQUEST"))
+                    .andExpect(jsonPath("$.error.message").value("요청 내용을 읽을 수 없어요. 입력한 내용을 확인해 주세요."));
+
+            verifyNoInteractions(service);
+        }
+
+        @Test
+        @DisplayName("AC-12-2 한 번도 만들어진 적 없는 할 일을 가리킬 때 완료 표시를 시도하면 같은 안내가 돌아오고, 다른 할 일은 바뀌지 않는다")
+        void 서비스가_할_일_없음을_주면_404다() throws Exception {
+            when(service.markCompleted(99L, true)).thenThrow(new TodoException(TodoErrorCode.TODO_NOT_FOUND));
+
+            patchTodo("99", "{\"completed\":true}")
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"))
+                    .andExpect(jsonPath("$.error.message").value("할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요."));
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {"abc", "0", "-1", "01", "+1", "1.5", "99999999999999999999"})
+        @DisplayName("AC-12-3 번호로 읽을 수 없는 값(예: \"abc\", 0, 음수)으로 할 일을 가리킬 때 완료 표시를 시도하면 존재하지 않는 할 일과 같은 안내가 돌아온다")
+        void 번호로_읽을_수_없으면_404이고_서비스는_호출되지_않는다(String id) throws Exception {
+            patchTodo(id, "{\"completed\":true}")
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"));
+
+            verifyNoInteractions(service);
         }
     }
 }
