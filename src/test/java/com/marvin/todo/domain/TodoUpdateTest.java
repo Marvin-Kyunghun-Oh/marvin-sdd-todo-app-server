@@ -1,11 +1,14 @@
 package com.marvin.todo.domain;
 
 import java.time.LocalDate;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -68,6 +71,25 @@ class TodoUpdateTest {
                     .isInstanceOfSatisfying(TodoException.class,
                             e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TITLE_REQUIRED));
         }
+    }
+
+    static Stream<Arguments> 불변식을_어기는_값() {
+        return Stream.of(
+                Arguments.of(null, null),
+                Arguments.of("", null),
+                Arguments.of(" 제목", null),
+                Arguments.of("가".repeat(101), null),
+                Arguments.of("제목", ""),
+                Arguments.of("제목", "설명 "),
+                Arguments.of("제목", "가".repeat(1001)));
+    }
+
+    @ParameterizedTest
+    @MethodSource("불변식을_어기는_값")
+    @DisplayName("정규화된 값이 불변식을 어기면 `TodoUpdate`를 만들 수 없다 (DATA_MODEL 2)")
+    void 불변식을_어기면_만들_수_없다(String title, String description) {
+        assertThatThrownBy(() -> new TodoUpdate(title, description, null, false))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static TodoUpdate updateWithDueDate(String rawDueDateText) {

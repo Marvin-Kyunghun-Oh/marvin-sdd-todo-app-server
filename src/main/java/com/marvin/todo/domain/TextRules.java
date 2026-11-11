@@ -50,13 +50,19 @@ final class TextRules {
         }
     }
 
-    static boolean isNormalizedTitle(String title) {
-        return title != null && !title.isEmpty() && title.equals(title.strip()) && length(title) <= MAX_TITLE_LENGTH;
+    static void requireNormalizedTitle(String title) {
+        boolean normalized = title != null && !title.isEmpty() && title.equals(title.strip()) && length(title) <= MAX_TITLE_LENGTH;
+        if (!normalized) {
+            throw new IllegalArgumentException("제목은 공백이 제거된 1~100자여야 한다");
+        }
     }
 
-    static boolean isNormalizedDescription(String description) {
-        return description == null
+    static void requireNormalizedDescription(String description) {
+        boolean normalized = description == null
                 || (!description.isEmpty() && description.equals(description.strip()) && length(description) <= MAX_DESCRIPTION_LENGTH);
+        if (!normalized) {
+            throw new IllegalArgumentException("설명은 없거나 공백이 제거된 1~1,000자여야 한다");
+        }
     }
 
     private static int length(String text) {

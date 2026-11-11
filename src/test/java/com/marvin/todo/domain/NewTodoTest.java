@@ -1,8 +1,11 @@
 package com.marvin.todo.domain;
 
+import java.util.stream.Stream;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -68,5 +71,16 @@ class NewTodoTest {
         assertThatThrownBy(() -> NewTodo.of("😀".repeat(101)))
                 .isInstanceOfSatisfying(TodoException.class,
                         e -> assertThat(e.code()).isEqualTo(TodoErrorCode.TITLE_TOO_LONG));
+    }
+
+    static Stream<String> 불변식을_어기는_제목() {
+        return Stream.of(null, "", "   ", " 제목", "제목 ", "가".repeat(101));
+    }
+
+    @ParameterizedTest
+    @MethodSource("불변식을_어기는_제목")
+    @DisplayName("정규화된 값이 불변식을 어기면 `NewTodo`를 만들 수 없다 (DATA_MODEL 2)")
+    void 불변식을_어기면_만들_수_없다(String title) {
+        assertThatThrownBy(() -> new NewTodo(title)).isInstanceOf(IllegalArgumentException.class);
     }
 }
