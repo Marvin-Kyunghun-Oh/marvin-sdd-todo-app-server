@@ -23,6 +23,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -32,8 +33,11 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -342,6 +346,88 @@ class TodoControllerTest {
             when(service.list(StatusFilter.ALL)).thenReturn(new ListResult(List.of(), EMPTY));
 
             mockMvc.perform(get("/todos").param("sort", "dueDate")).andExpect(status().isOk());
+        }
+    }
+
+    @Nested
+    @DisplayName("한 건 보기와 삭제")
+    class GetAndDelete {
+
+        private static final String NOT_FOUND_MESSAGE = "할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요.";
+
+        @Test
+        @DisplayName("AC-07-1 할 일이 있을 때 그 할 일을 열면 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 돌아온다")
+        void 있는_할_일을_열면_200과_할_일_모양이다() throws Exception {
+            when(service.get(2L)).thenReturn(
+                    new TodoView(new Todo(2L, "PRD 초안 작성하기", "목적과 범위 정리", LocalDate.of(2026, 11, 12), false), false));
+
+            mockMvc.perform(get("/todos/2"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(2))
+                    .andExpect(jsonPath("$.title").value("PRD 초안 작성하기"))
+                    .andExpect(jsonPath("$.description").value("목적과 범위 정리"))
+                    .andExpect(jsonPath("$.dueDate").value("2026-11-12"))
+                    .andExpect(jsonPath("$.completed").value(false))
+                    .andExpect(jsonPath("$.overdue").value(false));
+        }
+
+        @Test
+        @DisplayName("AC-12-1 한 번도 만들어진 적 없는 할 일을 가리킬 때 열면 \"할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요.\"라는 안내가 돌아온다")
+        void 없는_할_일을_열면_404_할_일_없음() throws Exception {
+            when(service.get(99L)).thenThrow(new TodoException(TodoErrorCode.TODO_NOT_FOUND));
+
+            mockMvc.perform(get("/todos/99"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"))
+                    .andExpect(jsonPath("$.error.message").value(NOT_FOUND_MESSAGE));
+        }
+
+        @Test
+        @DisplayName("AC-11-2 방금 삭제한 할 일을 가리킬 때 다시 열면 \"할 일을 찾을 수 없어요. 이미 삭제되었을 수 있어요.\"라는 안내가 돌아온다")
+        void 서비스가_할_일_없음을_주면_404다() throws Exception {
+            when(service.get(1L)).thenThrow(new TodoException(TodoErrorCode.TODO_NOT_FOUND));
+
+            mockMvc.perform(get("/todos/1"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"));
+        }
+
+        @Test
+        @DisplayName("AC-11-1 할 일이 있을 때 삭제하면 그 할 일은 이후 목록과 요약에서 사라진다")
+        void 삭제하면_204이고_본문이_없다() throws Exception {
+            mockMvc.perform(delete("/todos/1"))
+                    .andExpect(status().isNoContent())
+                    .andExpect(content().string(""));
+
+            verify(service).delete(1L);
+        }
+
+        @Test
+        @DisplayName("AC-12-2 한 번도 만들어진 적 없는 할 일을 가리킬 때 삭제를 시도하면 같은 안내가 돌아온다")
+        void 없는_할_일을_삭제하면_404_할_일_없음() throws Exception {
+            doThrow(new TodoException(TodoErrorCode.TODO_NOT_FOUND)).when(service).delete(99L);
+
+            mockMvc.perform(delete("/todos/99"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"))
+                    .andExpect(jsonPath("$.error.message").value(NOT_FOUND_MESSAGE));
+        }
+
+        static Stream<Arguments> 번호로_읽을_수_없는_id() {
+            return Stream.of("abc", "0", "-1", "01", "+1", "1.5", "99999999999999999999")
+                    .flatMap(id -> Stream.of(Arguments.of("GET", id), Arguments.of("DELETE", id)));
+        }
+
+        @ParameterizedTest
+        @MethodSource("번호로_읽을_수_없는_id")
+        @DisplayName("AC-12-3 번호로 읽을 수 없는 값(예: \"abc\", 0, 음수)으로 할 일을 가리킬 때 열기 또는 삭제를 시도하면 존재하지 않는 할 일과 같은 안내가 돌아온다")
+        void 번호로_읽을_수_없으면_404이고_서비스는_호출되지_않는다(String method, String id) throws Exception {
+            mockMvc.perform(request(HttpMethod.valueOf(method), "/todos/{id}", id))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.error.code").value("TODO_NOT_FOUND"))
+                    .andExpect(jsonPath("$.error.message").value(NOT_FOUND_MESSAGE));
+
+            verifyNoInteractions(service);
         }
     }
 }

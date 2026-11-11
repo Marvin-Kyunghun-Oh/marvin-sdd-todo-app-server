@@ -3,7 +3,9 @@ package com.marvin.todo.presentation;
 import com.marvin.todo.application.CreateTodoCommand;
 import com.marvin.todo.application.TodoService;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,5 +32,16 @@ class TodoController {
     @GetMapping
     TodoListResponse list(@RequestParam(name = "status", required = false) String status) {
         return TodoListResponse.from(service.list(StatusParam.parse(status)));
+    }
+
+    @GetMapping("/{id}")
+    TodoResponse get(@PathVariable("id") String id) {
+        return TodoResponse.from(service.get(PathId.parse(id)));
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void delete(@PathVariable("id") String id) {
+        service.delete(PathId.parse(id));
     }
 }
