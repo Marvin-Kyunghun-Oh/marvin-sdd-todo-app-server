@@ -1,6 +1,7 @@
 package com.marvin.todo.application;
 
 import java.time.Clock;
+import java.time.LocalDate;
 import java.util.List;
 
 import com.marvin.todo.domain.NewTodo;
@@ -22,10 +23,11 @@ public class TodoService {
     }
 
     public ListResult list(StatusFilter filter) {
+        LocalDate today = LocalDate.now(clock);
         List<Todo> snapshot = repository.findAll();
         List<TodoView> items = snapshot.stream()
                 .filter(filter::matches)
-                .map(todo -> new TodoView(todo, false))
+                .map(todo -> new TodoView(todo, todo.isOverdue(today)))
                 .toList();
         return new ListResult(items, Summary.of(snapshot));
     }

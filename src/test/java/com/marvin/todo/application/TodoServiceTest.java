@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 import com.marvin.todo.domain.NewTodo;
@@ -224,5 +225,90 @@ class TodoServiceTest {
         service.list(StatusFilter.DONE);
 
         verify(repository, times(1)).findAll();
+    }
+
+    private boolean 목록에서_기한_지남인가(boolean completed, LocalDate dueDate) {
+        when(repository.findAll()).thenReturn(List.of(new Todo(1L, "가", null, dueDate, completed)));
+
+        return service.list(StatusFilter.ALL).items().get(0).overdue();
+    }
+
+    @Test
+    @DisplayName("AC-10-1 오늘이 2026-11-10이고, 진행 중이며 마감일이 2026-11-06인 할 일이 있을 때 목록을 보면 그 할 일은 기한 지남이다")
+    void 마감일이_오늘보다_이전이면_기한_지남이다() {
+        assertThat(목록에서_기한_지남인가(false, LocalDate.of(2026, 11, 6))).isTrue();
+    }
+
+    @Test
+    @DisplayName("AC-10-2 오늘이 2026-11-10이고, 진행 중이며 마감일이 2026-11-10인 할 일이 있을 때 목록을 보면 기한 지남이 아니다")
+    void 마감일이_오늘이면_기한_지남이_아니다() {
+        assertThat(목록에서_기한_지남인가(false, LocalDate.of(2026, 11, 10))).isFalse();
+    }
+
+    @Test
+    @DisplayName("AC-10-3 오늘이 2026-11-10이고, 진행 중이며 마감일이 2026-11-12인 할 일이 있을 때 목록을 보면 기한 지남이 아니다")
+    void 마감일이_오늘보다_이후면_기한_지남이_아니다() {
+        assertThat(목록에서_기한_지남인가(false, LocalDate.of(2026, 11, 12))).isFalse();
+    }
+
+    @Test
+    @DisplayName("AC-10-4 오늘이 2026-11-10이고, 완료되었으며 마감일이 2026-11-09인 할 일이 있을 때 목록을 보면 기한 지남이 아니다")
+    void 완료된_할_일은_기한_지남이_아니다() {
+        assertThat(목록에서_기한_지남인가(true, LocalDate.of(2026, 11, 9))).isFalse();
+    }
+
+    @Test
+    @DisplayName("AC-10-6 한국 시간으로 2026-11-10 00:30(세계 표준시로는 11-09)일 때 마감일 2026-11-09인 진행 중 할 일의 기한 지남을 판정하면 오늘은 2026-11-10으로 계산되어 기한 지남이다")
+    void 한국_날짜_기준으로_오늘을_계산한다() {
+        Clock lateNightUtc = Clock.fixed(Instant.parse("2026-11-09T15:30:00Z"), SEOUL);
+        TodoService seoulService = new TodoService(repository, lateNightUtc);
+        when(repository.findAll()).thenReturn(List.of(new Todo(1L, "가", null, LocalDate.of(2026, 11, 9), false)));
+
+        assertThat(seoulService.list(StatusFilter.ALL).items().get(0).overdue()).isTrue();
+    }
+
+    @Test
+    @DisplayName("AC-03-3 목록을 보면 각 할 일에 대해 제목, 설명, 마감일, 완료 여부, 기한 지남 여부가 함께 돌아온다")
+    void 섞인_목록에서_항목마다_기한_지남_여부가_맞다() {
+        when(repository.findAll()).thenReturn(List.of(
+                new Todo(1L, "지남", null, LocalDate.of(2026, 11, 6), false),
+                new Todo(2L, "오늘", null, LocalDate.of(2026, 11, 10), false),
+                new Todo(3L, "완료", null, LocalDate.of(2026, 11, 9), true),
+                new Todo(4L, "없음", null, null, false)));
+
+        assertThat(service.list(StatusFilter.ALL).items())
+                .extracting(TodoView::overdue).containsExactly(true, false, false, false);
+    }
+
+    @Test
+    @DisplayName("목록의 모든 항목은 같은 \"오늘\"로 판정한다 (DATA_MODEL 3.1)")
+    void 오늘은_요청당_한_번만_계산한다() {
+        AtomicInteger instantCalls = new AtomicInteger();
+        Clock countingClock = new Clock() {
+            @Override
+            public ZoneId getZone() {
+                return SEOUL;
+            }
+
+            @Override
+            public Clock withZone(ZoneId zone) {
+                return this;
+            }
+
+            @Override
+            public Instant instant() {
+                instantCalls.incrementAndGet();
+                return CLOCK.instant();
+            }
+        };
+        TodoService countingService = new TodoService(repository, countingClock);
+        when(repository.findAll()).thenReturn(List.of(
+                new Todo(1L, "가", null, LocalDate.of(2026, 11, 6), false),
+                new Todo(2L, "나", null, LocalDate.of(2026, 11, 7), false),
+                new Todo(3L, "다", null, LocalDate.of(2026, 11, 8), false)));
+
+        countingService.list(StatusFilter.ALL);
+
+        assertThat(instantCalls).hasValue(1);
     }
 }
